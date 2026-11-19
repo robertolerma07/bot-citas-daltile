@@ -1,0 +1,6 @@
+# Lista blanca de teléfonos. Ningún script llama a un número que no esté aquí.
+# Copia este archivo como numeros_permitidos.txt y pon un celular por línea.
+# Formato: +52 seguido de 10 dígitos, sin espacios. Lo que va después de # es comentario.
+#
+# +5281XXXXXXXX  # Roberto
+# +5281XXXXXXXX  # Compañero 1

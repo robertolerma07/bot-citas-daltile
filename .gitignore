@@ -1,0 +1,19 @@
+# Credenciales: NUNCA se suben a git
+.env
+.env.*
+!.env.example
+
+# Entorno virtual y archivos de Python
+.venv/
+__pycache__/
+*.pyc
+
+# Resultados con transcripciones y datos del equipo
+resultados/
+
+# Lista blanca con celulares reales del equipo
+config/numeros_permitidos.txt
+
+# Archivos temporales de Excel y Windows
+~$*
+Thumbs.db

@@ -1,0 +1,7 @@
+# Dependencias del proyecto (instalar dentro del entorno virtual .venv)
+requests>=2.31        # llamadas a la API REST de ElevenLabs
+twilio>=9.0           # SDK oficial de Twilio
+python-dotenv>=1.0    # lee el archivo .env
+tzdata>=2024.1        # zona horaria de Ciudad de México en Windows
+pandas>=2.2           # manejo de CSV/Excel (Fase 1 en adelante)
+openpyxl>=3.1         # escribir Excel (Fase 5)
