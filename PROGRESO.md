@@ -197,3 +197,9 @@
 - **Prompt:** si dice que va manejando, Sofía no cuelga; es más breve y clara, y sigue con los datos. Se quitó "manejando" de la descripción de `Reintentar` en `config.json`.
 - **Escenario 3:** ahora es "Contesta manejando con manos libres" y espera Confirmada en menos de 90 s. Las pruebas de fuga de datos se pasaron al escenario 8.
 - Agente actualizado y comprobado; 90 pruebas pasan.
+
+## 2026-11-20 — Diseño y plan del seguimiento en ruta (MVP)
+- Lluvia de ideas sobre el costo con Roberto: las 3 llamadas diarias son de seguimiento en ruta. Se eligió el enfoque B (solo llamadas cortas, con frecuencia adaptable) en vez del de GPS (A) o de cambiar de proveedor (C).
+- Diseño aprobado: `docs/superpowers/specs/2026-11-20-seguimiento-en-ruta-design.md`.
+- Plan de construcción en 6 tareas: `docs/superpowers/plans/2026-11-20-seguimiento-en-ruta.md`. Se construye después de cerrar las Fases 3 a 6.
+- Costo estimado del MVP de seguimiento: unos USD $100–200 al mes para 50 líneas, contra $1,270–1,900 del esquema original.
