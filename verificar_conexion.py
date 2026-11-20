@@ -112,16 +112,20 @@ def main():
     valores, faltantes = cargar_env(
         ["ELEVENLABS_API_KEY", "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_NUMERO"]
     )
-    # TWILIO_NUMERO es opcional en esta fase.
-    faltantes_obligatorias = [f for f in faltantes if f != "TWILIO_NUMERO"]
-    if faltantes_obligatorias:
-        print("\n❌ Faltan en el archivo .env: " + ", ".join(faltantes_obligatorias))
-        print("   Copia .env.example como .env y llena los valores (ver README.md).")
-        sys.exit(1)
+    # Cada servicio se revisa solo si sus datos ya están en .env (TWILIO_NUMERO es opcional aquí).
+    if "ELEVENLABS_API_KEY" in valores:
+        ok_el = revisar_sin_filtrar("ElevenLabs", revisar_elevenlabs, valores["ELEVENLABS_API_KEY"])
+    else:
+        print("\n❌ ElevenLabs: falta ELEVENLABS_API_KEY en el archivo .env.")
+        ok_el = False
 
-    ok_el = revisar_sin_filtrar("ElevenLabs", revisar_elevenlabs, valores["ELEVENLABS_API_KEY"])
-    ok_tw = revisar_sin_filtrar("Twilio", revisar_twilio, valores["TWILIO_ACCOUNT_SID"],
-                                valores["TWILIO_AUTH_TOKEN"], valores.get("TWILIO_NUMERO"))
+    if "TWILIO_ACCOUNT_SID" in valores and "TWILIO_AUTH_TOKEN" in valores:
+        ok_tw = revisar_sin_filtrar("Twilio", revisar_twilio, valores["TWILIO_ACCOUNT_SID"],
+                                    valores["TWILIO_AUTH_TOKEN"], valores.get("TWILIO_NUMERO"))
+    else:
+        faltan_tw = [f for f in faltantes if f in ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN")]
+        print("\n❌ Twilio: faltan en el archivo .env: " + ", ".join(faltan_tw))
+        ok_tw = False
 
     print("\n=== Resumen ===")
     print(f"ElevenLabs: {'✅' if ok_el else '❌'}   Twilio: {'✅' if ok_tw else '❌'}")

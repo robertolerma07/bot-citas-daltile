@@ -30,3 +30,5 @@
   - horario a las 22:30, con `--forzar` y con hora en UTC;
   - confirmación con "si" en minúsculas, sin consola y con 0 llamadas.
 - Un revisor independiente encontró 3 problemas medios: un error de red que mostraba el SID, el script que se caía sin red, y `detener()`, que podía fallar con la salida redirigida. Los 3 se corrigieron y se volvieron a probar.
+- La key real de ElevenLabs funciona: es restringida (ElevenAgents y Voces en escritura, Usuario con acceso), el plan es Free con 0 de 10,000 créditos usados y no hay agentes. Twilio sigue pendiente.
+- `verificar_conexion.py` ahora revisa cada servicio por separado, para poder verificar ElevenLabs aunque Twilio todavía no esté configurado.
