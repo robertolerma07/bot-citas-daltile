@@ -15,6 +15,8 @@
 
 **Diseño:** `docs/superpowers/specs/2026-11-20-seguimiento-en-ruta-design.md`. Léelo junto con este plan.
 
+**Forma de construcción (elegida por Roberto):** un revisor independiente por tarea (superpowers:subagent-driven-development).
+
 **Cuándo:** se construye **después** de cerrar las Fases 3 a 6 de la prueba de concepto. Reutiliza lo que esas fases dejan.
 
 ## Restricciones globales
