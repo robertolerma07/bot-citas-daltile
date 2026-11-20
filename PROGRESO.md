@@ -32,3 +32,12 @@
 - Un revisor independiente encontró 3 problemas medios: un error de red que mostraba el SID, el script que se caía sin red, y `detener()`, que podía fallar con la salida redirigida. Los 3 se corrigieron y se volvieron a probar.
 - La key real de ElevenLabs funciona: es restringida (ElevenAgents y Voces en escritura, Usuario con acceso), el plan es Free con 0 de 10,000 créditos usados y no hay agentes. Twilio sigue pendiente.
 - `verificar_conexion.py` ahora revisa cada servicio por separado, para poder verificar ElevenLabs aunque Twilio todavía no esté configurado.
+- Credenciales de Twilio reales verificadas: la cuenta es de prueba (Trial), está activa, tiene 0 números verificados y saldo de 0.0 USD (usa los minutos gratis de prueba).
+- La consulta del permiso para México por API respondió HTTP 401: la cuenta de prueba no deja leer ese dato. Hay que revisarlo a mano en Voice → Settings → Geo permissions.
+- **La Fase 0 cumple el criterio de salida:** `verificar_conexion.py` confirma que las keys de ElevenLabs y Twilio funcionan, sin hacer llamadas.
+
+**Pendientes de Roberto antes de la Fase 4** (no bloquean las Fases 1 a 3)
+- Obtener el número de prueba de Twilio y ponerlo en `TWILIO_NUMERO`.
+- Verificar los celulares del equipo en Twilio (máximo 5).
+- Confirmar que México está habilitado en Geo permissions.
+- Llenar `config/numeros_permitidos.txt`.
