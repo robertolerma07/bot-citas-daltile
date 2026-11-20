@@ -28,8 +28,7 @@ python -m venv .venv
 Ejemplos:
 ```
 .venv\Scripts\python verificar_conexion.py
-.venv\Scripts\python validar_citas.py --lista datos
-umeros_demo.txt --mostrar-voz
+.venv\Scripts\python validar_citas.py --lista datos\numeros_demo.txt --mostrar-voz
 .venv\Scripts\python -m pytest -q
 ```
 
