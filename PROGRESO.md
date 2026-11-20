@@ -163,3 +163,31 @@
   - Después del cierre, ahora cuelga de inmediato, sin esperar respuesta.
 - **Costo:** una prueba de unos 2 minutos gastó 1,668 de los 10,000 créditos del plan Free. Con Free quedan unas 5 pruebas más; la Fase 3 (16 o más pruebas) necesita Starter.
 - **La Fase 2 cumple su criterio de salida:** el agente existe con la voz elegida y las variables configuradas, y Roberto lo probó desde el navegador.
+
+## 2026-11-20 — Fase 3: Pruebas en navegador (archivos listos)
+
+**Qué se hizo**
+- `pruebas/escenarios.md`: guía de los 8 escenarios (qué decir y qué se espera) y regla de salida.
+- `pruebas/esperados.csv`: resultados esperados de cada escenario, para revisarlos en automático.
+- `pruebas/bitacora.csv`: bitácora de pruebas, todavía vacía.
+- `agente/usar_cita_en_prueba.py --escenario N`: carga la cita del escenario en el agente. `subir_agente.py` ahora acepta `--folio`, conserva la cita cargada y pone el saludo según la hora.
+- `pruebas/revisar_prueba.py`. Hace esto:
+  - trae la conversación y confirma que sea de la cita del escenario;
+  - detecta si fue por voz o por texto;
+  - compara estatus, nombre, motivo y hora estimada;
+  - busca fechas y horas que no son de la cita, cifras con número, frases prohibidas, datos dichos en los escenarios 3 y 8, y si siguió hablando después de despedirse;
+  - pregunta la parte humana y anota en la bitácora con el resumen de rondas. Un escenario reintentado en la misma ronda no cuenta como pasado.
+
+**Verificación**
+- 90 pruebas automáticas pasan, con conversaciones inventadas: datos correctos sin falsos positivos, fecha y hora inventadas, folio sin comas, teléfono de tráfico dicho en el escenario 3, silencio en el escenario 8, rondas con reintento.
+- Con la prueba real de Roberto (`conv_9301…`), el script marca solos los dos problemas vistos a mano ("¿algo más…?" y hablar después de despedirse) y la duración de 107 s. Con un escenario equivocado, se detiene.
+- La revisión independiente encontró falsos positivos del detector de horas, fugas no detectadas, riesgo de anotar la conversación de otro escenario y rondas que pasaban con reintentos. Todo se corrigió y se probó.
+
+**Costos medidos**
+- 1,668 créditos por 107 s (unos 935 créditos por minuto). Los 10,000 del plan Free alcanzan para unos 6 minutos.
+- Starter (30,000 créditos) no alcanza para la Fase 3 y la Fase 4 completas por voz.
+- Propuesta: ronda 1 por texto y ronda 2 por voz.
+
+**Pendientes**
+- Roberto: subir a Starter y correr la ronda 1.
+- Hacer una prueba de silencio (escenario 8) antes de la ronda 1, para ver qué extrae ElevenLabs cuando nadie habla.

@@ -25,6 +25,8 @@ python -m venv .venv
 | `validar_citas.py` | Revisa la tabla de citas (formatos, vacíos, duplicados, lista blanca, fechas pasadas) | No |
 | `herramientas/generar_datos_ejemplo.py` | Regenera los archivos de ejemplo de `datos/` | No |
 | `agente/elegir_voces.py` | Lista voces mexicanas que sirven para agentes y escribe `agente/voces_mexicanas.md` | No |
+| `agente/usar_cita_en_prueba.py --escenario N` | Carga en el agente la cita del escenario N para probar en navegador | No |
+| `pruebas/revisar_prueba.py --escenario N --ronda R` | Revisa la última prueba contra lo esperado y la anota en `pruebas/bitacora.csv` | No |
 | `agente/subir_agente.py` | Crea o actualiza el agente desde `prompt.md` y `config.json`, y comprueba cómo quedó (`--revisar` solo comprueba) | No (no hace llamadas) |
 
 Ejemplos:

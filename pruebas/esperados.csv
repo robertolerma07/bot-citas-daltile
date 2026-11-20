@@ -1,0 +1,9 @@
+escenario,nombre,tipo_contacto,folio,estatus,con_quien_hablo_contiene,motivo_contiene,hora_estimada_contiene,no_debe_decir_folio,max_duracion_seg
+1,Confirma sin problema,Despacho,458217,Confirmada,Juan,,,No,90
+2,No puede: unidad descompuesta,Despacho,458217,No puede,Juan,descompu,tres,No,90
+3,Está manejando,Operador,458230,Reintentar,Miguel,,,Sí,
+4,Contesta otra persona,Operador,458244,Reintentar,Pedro,,,No,90
+5,Pide repetir la dirección,Operador,458230,Confirmada,Miguel,,,No,
+6,Ruido de fondo,Operador,458244,Confirmada,Ernesto,,,No,
+7,Interrumpe a mitad de los datos,Despacho,458217,Confirmada,Juan,,,No,
+8,No contesta (en navegador: silencio),Despacho,458217,Sin respuesta,,,,Sí,

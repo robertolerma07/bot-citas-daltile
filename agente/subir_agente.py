@@ -18,14 +18,15 @@ import argparse
 import json
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import requests
 from dotenv import set_key
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from lib.formato_voz import variables_de_voz  # noqa: E402
-from lib.seguridad import RAIZ, RUTA_ENV, cargar_env, detener  # noqa: E402
+from lib.formato_voz import saludo, variables_de_voz  # noqa: E402
+from lib.seguridad import RAIZ, RUTA_ENV, ZONA_CDMX, cargar_env, detener  # noqa: E402
 from validar_citas import leer_citas  # noqa: E402
 
 API = "https://api.elevenlabs.io"
@@ -51,16 +52,34 @@ SECCIONES = [
 ]
 
 
-def variables_de_ejemplo():
-    """Valores de ejemplo (placeholders) tomados de la primera cita, para probar en el navegador."""
+def variables_de_ejemplo(folio=None):
+    """
+    Valores de ejemplo (placeholders) de una cita, para probar en el navegador.
+    Si no se indica folio, se usa la primera cita de datos/citas_prueba.csv.
+    """
     _, filas = leer_citas(RAIZ / "datos" / "citas_prueba.csv")
     if not filas:
         detener("datos/citas_prueba.csv no tiene citas para usar como ejemplo.")
-    cita = filas[0]
+    if folio:
+        coincidencias = [f for f in filas if f["folio"] == folio]
+        if not coincidencias:
+            detener(f"El folio {folio} no está en datos/citas_prueba.csv. "
+                    "Indica una cita que sí exista con --folio (o usa agente\\usar_cita_en_prueba.py).")
+        cita = coincidencias[0]
+    else:
+        cita = filas[0]
     ejemplo = {c: cita[c] for c in CAMPOS_CITA_PARA_AGENTE}
     ejemplo.update(variables_de_voz(cita))
-    ejemplo["saludo"] = "Buenas tardes"
+    ejemplo["saludo"] = saludo(datetime.now(ZONA_CDMX).strftime("%H:%M"))
+    ejemplo["folio"] = cita["folio"]  # no lo usa el prompt; sirve para saber qué cita está cargada
     return ejemplo
+
+
+def folio_cargado(agent_id, api_key):
+    """Folio de la cita que tiene cargada el agente ahora (None si no se sabe)."""
+    agente = llamar_api("GET", f"/v1/convai/agents/{agent_id}", api_key)
+    variables = (agente.get("conversation_config", {}).get("agent", {}).get("dynamic_variables") or {})
+    return (variables.get("dynamic_variable_placeholders") or {}).get("folio")
 
 
 def armar_cuerpo(config, prompt, ejemplo):
@@ -184,6 +203,8 @@ def comprobar(agente, cuerpo):
 def main():
     parser = argparse.ArgumentParser(description="Crea o actualiza el agente en ElevenLabs.")
     parser.add_argument("--revisar", action="store_true", help="solo comprobar, sin cambiar nada")
+    parser.add_argument("--folio", help="cita cuyos datos se cargan como ejemplo (por defecto, la que ya tiene "
+                                        "cargada el agente, o la primera de citas_prueba.csv)")
     args = parser.parse_args()
 
     valores, faltantes = cargar_env(["ELEVENLABS_API_KEY", "ELEVENLABS_AGENT_ID"])
@@ -194,7 +215,15 @@ def main():
 
     config = json.loads((CARPETA / "config.json").read_text(encoding="utf-8"))
     prompt = (CARPETA / "prompt.md").read_text(encoding="utf-8")
-    ejemplo = variables_de_ejemplo()
+    folio = args.folio or (folio_cargado(agent_id, api_key) if agent_id else None)
+    ejemplo = variables_de_ejemplo(folio)
+    if args.revisar and agent_id:
+        # El saludo depende de la hora: al solo revisar se compara contra el que ya está guardado
+        guardado = llamar_api("GET", f"/v1/convai/agents/{agent_id}", api_key)
+        ph = (((guardado.get("conversation_config") or {}).get("agent") or {}).get("dynamic_variables") or {}
+              ).get("dynamic_variable_placeholders") or {}
+        ejemplo["saludo"] = ph.get("saludo", ejemplo["saludo"])
+    print(f"Cita de ejemplo cargada: folio {ejemplo['folio']} ({ejemplo['contacto']}, {ejemplo['tipo_contacto']})")
     usadas = revisar_variables([prompt, config["primer_mensaje"]], ejemplo)
     print(f"Variables usadas por el prompt: {len(usadas)} (todas con valor de ejemplo)")
     cuerpo = armar_cuerpo(config, prompt, ejemplo)
