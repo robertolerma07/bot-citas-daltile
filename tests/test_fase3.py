@@ -94,16 +94,16 @@ def test_escenario_2_pasa_con_motivo_y_hora():
     assert estatus == "No puede" and all(nombres_ok(revisiones).values())
 
 
-def test_escenario_3_falla_si_dio_el_folio_aunque_sea_sin_comas():
+def test_escenario_8_falla_si_dio_el_folio_aunque_sea_sin_comas():
     conv = conversacion([("agent", "El folio es cuarenta y cinco ochenta y dos diecisiete.")],
-                        {"estatus": "Reintentar", "con_quien_hablo": "Miguel"})
-    assert not nombres_ok(evaluar(conv, ESPERADOS["3"], VOZ, "voz", CITA)[0])["No dio datos de la cita"]
+                        {"estatus": "Sin respuesta"})
+    assert not nombres_ok(evaluar(conv, ESPERADOS["8"], VOZ, "voz", CITA)[0])["No dio datos de la cita"]
 
 
-def test_escenario_3_falla_si_dio_el_telefono_de_trafico():
+def test_escenario_8_falla_si_dio_el_telefono_de_trafico():
     conv = conversacion([("agent", f"Comuníquese a tráfico al {VOZ['tel_trafico_texto']}.")],
-                        {"estatus": "Reintentar", "con_quien_hablo": "Miguel"})
-    assert not nombres_ok(evaluar(conv, ESPERADOS["3"], VOZ, "voz", CITA)[0])["No dio datos de la cita"]
+                        {"estatus": "Sin respuesta"})
+    assert not nombres_ok(evaluar(conv, ESPERADOS["8"], VOZ, "voz", CITA)[0])["No dio datos de la cita"]
 
 
 def test_escenario_8_silencio_sin_extraccion_cuenta_como_sin_respuesta():

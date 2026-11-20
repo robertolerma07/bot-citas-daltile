@@ -34,7 +34,7 @@
     "estatus": {
       "type": "string",
       "enum": ["Confirmada", "No puede", "Sin respuesta", "Reintentar"],
-      "description": "Resultado de la llamada. Responde EXACTAMENTE uno de estos valores: Confirmada (el contacto, o quien contestó por él, confirmó que llegan a la hora de la cita, de palabra o marcando 1). No puede (dijeron que no llegarán, o que llegarán después de la hora de la cita). Reintentar (el operador estaba manejando; o contestó otra persona que no pudo confirmar; o el contacto dijo que no sabe o que lo va a revisar; o la llamada se cortó antes de que confirmaran o dijeran que no pueden). Sin respuesta (nadie habló o contestó un buzón de voz). Si ya confirmaron o ya dijeron que no pueden, ese es el estatus aunque la llamada se corte después."
+      "description": "Resultado de la llamada. Responde EXACTAMENTE uno de estos valores: Confirmada (el contacto, o quien contestó por él, confirmó que llegan a la hora de la cita, de palabra o marcando 1). No puede (dijeron que no llegarán, o que llegarán después de la hora de la cita). Reintentar (contestó otra persona que no pudo confirmar; o el contacto dijo que no sabe o que lo va a revisar; o la llamada se cortó antes de que confirmaran o dijeran que no pueden). Sin respuesta (nadie habló o contestó un buzón de voz). Si ya confirmaron o ya dijeron que no pueden, ese es el estatus aunque la llamada se corte después."
     },
     "con_quien_hablo": {
       "type": "string",

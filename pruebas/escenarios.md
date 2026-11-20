@@ -44,10 +44,10 @@ Propuesta para ahorrar créditos: **ronda 1 por texto** (valida la lógica: esta
 - **Esperado:** estatus **No puede**, motivo contiene «descompu» (descompuesta o descompuso), hora estimada contiene «tres».
 - **Además debe:** NO ofrecer reprogramar ni decir que alguien le va a llamar.
 
-### 3. Está manejando — Operador (458230, Miguel Ángel Torres)
-- **Quien simula dice:** "Sí, soy Miguel." → cuando pregunte si maneja: "Sí, voy manejando."
-- **Esperado:** estatus **Reintentar**.
-- **Además debe:** despedirse en una frase y colgar **sin dar ningún dato** (ni folio ni teléfono de tráfico).
+### 3. Contesta manejando con manos libres — Operador (458230, Miguel Ángel Torres)
+- **Quien simula dice:** "Sí, soy Miguel, voy manejando, lo traigo en altavoz." → escucha → "Sí, ahí llego."
+- **Esperado:** estatus **Confirmada**, con quién habló contiene «Miguel».
+- **Además debe:** NO colgar por ir manejando; ser breve y clara, y durar menos de 90 segundos.
 
 ### 4. Contesta otra persona — Operador (458244, para Ernesto Villalobos)
 - **Quien simula dice:** "No, soy Pedro Sánchez, su compañero." → acepta el mensaje: "Sí, yo le digo." → cuando pregunte si puede confirmar: "No sé, él le confirma."

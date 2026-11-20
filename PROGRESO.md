@@ -191,3 +191,9 @@
 **Pendientes**
 - Roberto: subir a Starter y correr la ronda 1.
 - Hacer una prueba de silencio (escenario 8) antes de la ronda 1, para ver qué extrae ElevenLabs cuando nadie habla.
+
+### 2026-11-20 — Decisión de Roberto: se elimina la regla de manejo
+- Hoy los operadores contestan los seguimientos con manos libres o altavoz. Roberto decidió quitar la regla "si está manejando, se despide y Reintentar", tanto para el MVP como para esta prueba.
+- **Prompt:** si dice que va manejando, Sofía no cuelga; es más breve y clara, y sigue con los datos. Se quitó "manejando" de la descripción de `Reintentar` en `config.json`.
+- **Escenario 3:** ahora es "Contesta manejando con manos libres" y espera Confirmada en menos de 90 s. Las pruebas de fuga de datos se pasaron al escenario 8.
+- Agente actualizado y comprobado; 90 pruebas pasan.
