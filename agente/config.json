@@ -1,0 +1,52 @@
+{
+  "_comentario": "Configuración del agente Sofía. El prompt se toma de agente/prompt.md y las variables de ejemplo de la primera cita de datos/citas_prueba.csv. Para aplicar cambios: .venv\\Scripts\\python agente\\subir_agente.py",
+  "name": "Sofia - avisos de citas Daltile (prueba de concepto)",
+  "tags": ["poc-citas-daltile"],
+  "voz": {
+    "voice_id": "KUvfKweuqSul0lbDIZUB",
+    "public_owner_id": "4520ecf28dba07d584adfa2e3d41fa8d7c722a0128a2e57324aad9a3b2f97e1d",
+    "nombre": "Diana - Warm, Expressive & Professional (provisional, falta que Roberto elija)",
+    "model_id": "eleven_flash_v2_5",
+    "stability": 0.5,
+    "similarity_boost": 0.8,
+    "speed": 1.0
+  },
+  "idioma": "es",
+  "llm": "gemini-2.5-flash",
+  "temperatura": 0,
+  "primer_mensaje": "{{saludo}}, le habla Sofía, asistente automática de logística de Daltile. Esta llamada se graba. ¿Hablo con {{contacto}}?",
+  "duracion_maxima_seg": 120,
+  "turnos": {
+    "turn_timeout": 7,
+    "turn_eagerness": "normal",
+    "silence_end_call_timeout": 20
+  },
+  "dtmf": {
+    "dtmf_input_timeout": 2,
+    "hash_terminator": false,
+    "redact_input": false
+  },
+  "privacidad": {
+    "record_voice": true,
+    "retention_days": 30
+  },
+  "extraccion_de_datos": {
+    "estatus": {
+      "type": "string",
+      "enum": ["Confirmada", "No puede", "Sin respuesta", "Reintentar"],
+      "description": "Resultado de la llamada. Responde EXACTAMENTE uno de estos valores: Confirmada (el contacto, o quien contestó por él, confirmó que llegan a la hora de la cita, de palabra o marcando 1). No puede (dijeron que no llegarán, o que llegarán después de la hora de la cita). Reintentar (el operador estaba manejando; o contestó otra persona que no pudo confirmar; o el contacto dijo que no sabe o que lo va a revisar; o la llamada se cortó antes de que confirmaran o dijeran que no pueden). Sin respuesta (nadie habló o contestó un buzón de voz). Si ya confirmaron o ya dijeron que no pueden, ese es el estatus aunque la llamada se corte después."
+    },
+    "con_quien_hablo": {
+      "type": "string",
+      "description": "Nombre de la persona que contestó la llamada, tal como lo dijo. Si fue el contacto esperado, su nombre. Si fue otra persona, el nombre que dio. Vacío si no se supo."
+    },
+    "motivo": {
+      "type": "string",
+      "description": "Solo si el estatus es No puede: el motivo que dieron para no llegar o para llegar tarde, en pocas palabras y con sus propias palabras. Vacío en cualquier otro caso."
+    },
+    "hora_estimada": {
+      "type": "string",
+      "description": "Solo si el estatus es No puede: la hora o el momento estimado de llegada tal como lo dijeron (por ejemplo 'a las tres de la tarde' o 'mañana temprano'). No lo conviertas a otro formato. Vacío si no la dieron."
+    }
+  }
+}

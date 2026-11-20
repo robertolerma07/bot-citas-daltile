@@ -99,3 +99,53 @@
 **Pendientes**
 - Roberto: cuando se definan las personas del equipo que simularán cada escenario, poner sus celulares en las citas y en `config/numeros_permitidos.txt`.
 - Si las pruebas pasan del 3 de diciembre, actualizar las fechas de las citas: el validador rechaza fechas pasadas.
+
+## 2026-11-19 — Fase 2: El agente
+
+**Qué se hizo**
+- `agente/prompt.md`: tu prompt con ajustes mínimos:
+  - usa las variables ya formateadas, incluida la nueva `direccion_texto`, que escribe en palabras el número de la calle;
+  - acepta la tecla 1 como confirmación;
+  - no deja datos en un buzón de voz;
+  - define qué hacer cuando contesta otra persona.
+- `agente/config.json`. Contiene:
+  - voz con el modelo `eleven_flash_v2_5` (multilenguaje);
+  - idioma `es` y LLM `gemini-2.5-flash` con temperatura 0;
+  - primer mensaje con `{{saludo}}` según la hora (`lib/formato_voz.saludo`);
+  - duración máxima de 120 s y fin de llamada tras 20 s de silencio;
+  - tecla 1 (DTMF) y herramientas de terminar llamada y detectar buzón;
+  - grabación activada con retención de 30 días;
+  - extracción de `estatus` (fijo a los 4 valores), `con_quien_hablo`, `motivo` y `hora_estimada`.
+- `agente/subir_agente.py`:
+  - crea el agente (guarda su ID en `.env`) o lo actualiza;
+  - agrega la voz a "Mis voces" si hace falta;
+  - lee de vuelta lo guardado y lo compara campo por campo con lo pedido. `--revisar` solo compara.
+- `agente/elegir_voces.py` genera `agente/voces_mexicanas.md` con 73 voces mexicanas que sí sirven para agentes, con enlaces para escucharlas.
+
+**Verificación**
+- El agente quedó creado en ElevenLabs (plan Free) y las 11 secciones de la comprobación coinciden con lo pedido; las interrupciones están activadas.
+- Una prueba aparte confirma que la comprobación sí falla si cambia la voz, se desactiva la tecla 1 o sobra un campo.
+- 73 de 73 pruebas automáticas pasan.
+
+**Hallazgos (no venían en la documentación)**
+- Una voz de la biblioteca debe agregarse a "Mis voces" antes de usarla en un agente (`POST /v1/voices/add/{public_owner_id}/{voice_id}`).
+- Las voces con "moderación en vivo" no se pueden usar en agentes. Por eso la primera voz provisional, Ale Rodriguez, se descartó, aunque quedó agregada en Mis voces sin usarse. Se usa como provisional Diana - Warm, Expressive & Professional.
+
+**Revisión independiente: correcciones aplicadas**
+- Si el operador dice en cualquier momento que va manejando, Sofía se despide de inmediato.
+- "Llego, pero tarde" cuenta como No puede, con motivo y hora estimada.
+- "No sé, lo reviso" cuenta como Reintentar.
+- Si ya confirmaron, el estatus se mantiene aunque la llamada se corte.
+- Al repetir, se usan exactamente los mismos textos; el teléfono va dígito por dígito.
+- Con ruido, si no marcan 1, no se toma como un sí.
+- `hora_estimada` se guarda tal como la dijeron, sin convertirla.
+- La voz solo se agrega a Mis voces si ElevenLabs dice que no está, y si falla el guardado en `.env` el script muestra el ID del agente.
+
+**Decisión**
+- La despedida al operador que maneja conserva el texto de Roberto ("No se preocupe, le marco más tarde; maneje con cuidado."). El revisor señaló que promete una llamada, pero el sistema sí reintenta.
+
+**Pendientes**
+- Roberto: elegir la voz definitiva y probar el agente una vez en el navegador.
+- En la prueba en navegador, confirmar en *Advanced* que la entrada por teclado (DTMF) aparece activada. La API siempre regresa esa configuración, así que por API no se distingue si está activa.
+- Fase 4: confirmar en una llamada real cómo llega la tecla 1 a la transcripción.
+- Fase 4: el escenario 8 (no contesta) se marca con el estado de la llamada, porque si nadie contesta el agente nunca habla.

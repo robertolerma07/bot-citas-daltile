@@ -24,6 +24,8 @@ python -m venv .venv
 | `verificar_conexion.py` | Confirma que las keys de ElevenLabs y Twilio funcionan y si se puede llamar a México | No (solo lectura) |
 | `validar_citas.py` | Revisa la tabla de citas (formatos, vacíos, duplicados, lista blanca, fechas pasadas) | No |
 | `herramientas/generar_datos_ejemplo.py` | Regenera los archivos de ejemplo de `datos/` | No |
+| `agente/elegir_voces.py` | Lista voces mexicanas que sirven para agentes y escribe `agente/voces_mexicanas.md` | No |
+| `agente/subir_agente.py` | Crea o actualiza el agente desde `prompt.md` y `config.json`, y comprueba cómo quedó (`--revisar` solo comprueba) | No (no hace llamadas) |
 
 Ejemplos:
 ```
@@ -40,6 +42,11 @@ Ejemplos:
 - Escribe las direcciones sin abreviaturas ("Avenida", "colonia"), para que el bot las lea bien.
 - Las columnas de resultado (`estatus`, `motivo`, etc.) se dejan vacías; las llenan los scripts.
 - Antes de llamar, los teléfonos de las citas deben estar en `config/numeros_permitidos.txt`.
+
+## El agente (`agente/`)
+- `prompt.md`: lo que dice y hace Sofía. `config.json`: voz, idioma, modelo, tiempos, tecla 1, privacidad y datos que se extraen de cada llamada.
+- Después de cambiar cualquiera de los dos, corre `.venv\Scripts\python agente\subir_agente.py` y haz commit, para que cada cambio quede versionado.
+- Para cambiar la voz, toma el `voice_id` y el `public_owner_id` de `agente/voces_mexicanas.md` y ponlos en `config.json`. El script agrega la voz a "Mis voces" si hace falta.
 
 ## Candados de seguridad (`lib/seguridad.py`)
 Todos los scripts que llamen:

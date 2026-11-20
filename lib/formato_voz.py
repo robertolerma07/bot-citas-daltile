@@ -47,6 +47,51 @@ def numero_a_texto(n):
     return texto if unidad == 0 else f"{texto} y {UNIDADES[unidad]}"
 
 
+CENTENAS = {1: "ciento", 2: "doscientos", 3: "trescientos", 4: "cuatrocientos", 5: "quinientos",
+            6: "seiscientos", 7: "setecientos", 8: "ochocientos", 9: "novecientos"}
+
+
+def numero_largo_a_texto(n):
+    """
+    Número del 0 al 999,999 en palabras, para números de calle:
+    1520 -> 'mil quinientos veinte'; 21000 -> 'veintiún mil'; 100 -> 'cien'.
+    """
+    if not 0 <= n <= 999_999:
+        raise ValueError(f"Solo se convierten números de 0 a 999,999, llegó {n}")
+    if n < 100:
+        return numero_a_texto(n)
+    if n < 1000:
+        c, resto = divmod(n, 100)
+        base = "cien" if n == 100 else CENTENAS[c]
+        return base if resto == 0 else f"{base} {numero_a_texto(resto)}"
+    miles, resto = divmod(n, 1000)
+    if miles == 1:
+        prefijo = "mil"
+    else:
+        # "uno" se acorta antes de "mil": veintiún mil, treinta y un mil, ciento un mil
+        texto_miles = numero_largo_a_texto(miles)
+        if texto_miles.endswith("veintiuno"):
+            texto_miles = texto_miles[:-len("veintiuno")] + "veintiún"
+        elif texto_miles.endswith("uno"):
+            texto_miles = texto_miles[:-1]
+        prefijo = f"{texto_miles} mil"
+    return prefijo if resto == 0 else f"{prefijo} {numero_largo_a_texto(resto)}"
+
+
+def direccion_texto(direccion):
+    """
+    Escribe en palabras los números de la dirección:
+    'Calle Ceramistas 875, colonia Las Huertas' -> 'Calle Ceramistas ochocientos setenta y cinco, colonia Las Huertas'.
+    Un número de más de 6 cifras o con cero inicial (p. ej. un código postal '06600') se dice dígito por dígito.
+    """
+    def convertir(m):
+        digitos = m.group()
+        if len(digitos) > 6 or (len(digitos) > 1 and digitos[0] == "0"):
+            return " ".join(UNIDADES[int(c)] for c in digitos)
+        return numero_largo_a_texto(int(digitos))
+    return re.sub(r"[0-9]+", convertir, direccion)
+
+
 def fecha_texto(fecha_iso):
     """'2026-12-01' -> 'el martes primero de diciembre'. El día 1 se dice 'primero'."""
     if not PATRON_FECHA.fullmatch(fecha_iso):
@@ -156,6 +201,18 @@ def telefono_digitos(telefono):
     return "... ".join(", ".join(UNIDADES[int(c)] for c in g) for g in grupos)
 
 
+def saludo(hora_hhmm):
+    """Saludo según la hora de la llamada: 'Buenos días' (antes de 12), 'Buenas tardes' (12 a 19) o 'Buenas noches'."""
+    if not PATRON_HORA.fullmatch(hora_hhmm) or int(hora_hhmm[:2]) > 23:
+        raise ValueError(f"Hora inválida: {hora_hhmm} (debe ser HH:MM)")
+    h = int(hora_hhmm[:2])
+    if h < 12:
+        return "Buenos días"
+    if h < 19:
+        return "Buenas tardes"
+    return "Buenas noches"
+
+
 def variables_de_voz(cita):
     """
     Recibe una fila de la tabla de citas (diccionario) y regresa las variables extra
@@ -164,6 +221,7 @@ def variables_de_voz(cita):
     return {
         "fecha_cita_texto": fecha_texto(cita["fecha_cita"]),
         "hora_cita_texto": hora_texto(cita["hora_cita"]),
+        "direccion_texto": direccion_texto(cita["direccion"]),
         "folio_texto": folio_texto(cita["folio"]),
         "tel_trafico_texto": telefono_pares(cita["tel_trafico"]),
         "tel_trafico_digitos": telefono_digitos(cita["tel_trafico"]),

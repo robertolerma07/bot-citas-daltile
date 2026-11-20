@@ -14,8 +14,9 @@ import pytest
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ))
 
-from lib.formato_voz import (fecha_texto, folio_texto, hora_texto, numero_a_texto,  # noqa: E402
-                             telefono_digitos, telefono_pares)
+from lib.formato_voz import (direccion_texto, fecha_texto, folio_texto, hora_texto,  # noqa: E402
+                             numero_a_texto, numero_largo_a_texto, saludo, telefono_digitos,
+                             telefono_pares)
 from validar_citas import validar  # noqa: E402
 
 DEMO = RAIZ / "datos" / "numeros_demo.txt"
@@ -91,6 +92,38 @@ def test_folio_texto():
     for malo in ["45#8", "", "３４"]:
         with pytest.raises(ValueError):
             folio_texto(malo)
+
+
+@pytest.mark.parametrize("n, texto", [
+    (100, "cien"), (101, "ciento uno"), (115, "ciento quince"), (500, "quinientos"),
+    (875, "ochocientos setenta y cinco"), (1000, "mil"), (1520, "mil quinientos veinte"),
+    (2001, "dos mil uno"), (3100, "tres mil cien"), (21000, "veintiún mil"),
+    (31500, "treinta y un mil quinientos"), (101000, "ciento un mil"), (999999,
+     "novecientos noventa y nueve mil novecientos noventa y nueve"),
+])
+def test_numero_largo(n, texto):
+    assert numero_largo_a_texto(n) == texto
+
+
+def test_direccion_texto():
+    assert direccion_texto("Calle Ceramistas 875, colonia Las Huertas") == \
+        "Calle Ceramistas ochocientos setenta y cinco, colonia Las Huertas"
+    assert direccion_texto("Calle 5 de Mayo 12, código postal 06600") == \
+        "Calle cinco de Mayo doce, código postal cero seis seis cero cero"
+    assert direccion_texto("Sin número") == "Sin número"
+
+
+def test_saludo_hora_invalida():
+    with pytest.raises(ValueError):
+        saludo("9:00")
+
+
+@pytest.mark.parametrize("hora, texto", [
+    ("09:00", "Buenos días"), ("11:59", "Buenos días"), ("12:00", "Buenas tardes"),
+    ("18:59", "Buenas tardes"), ("19:00", "Buenas noches"),
+])
+def test_saludo(hora, texto):
+    assert saludo(hora) == texto
 
 
 def test_telefono():
