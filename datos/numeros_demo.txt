@@ -1,0 +1,5 @@
+# Lista blanca SOLO para probar el validador con los teléfonos ficticios de los ejemplos.
+# Para llamadas reales se usa config/numeros_permitidos.txt.
++525500000001  # Juan Pérez (ficticio)
++525500000002  # Miguel Ángel Torres (ficticio)
++525500000003  # Ernesto Villalobos (ficticio)

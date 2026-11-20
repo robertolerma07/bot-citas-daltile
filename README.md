@@ -22,11 +22,25 @@ python -m venv .venv
 | Script | Qué hace | ¿Gasta dinero? |
 |---|---|---|
 | `verificar_conexion.py` | Confirma que las keys de ElevenLabs y Twilio funcionan y si se puede llamar a México | No (solo lectura) |
+| `validar_citas.py` | Revisa la tabla de citas (formatos, vacíos, duplicados, lista blanca, fechas pasadas) | No |
+| `herramientas/generar_datos_ejemplo.py` | Regenera los archivos de ejemplo de `datos/` | No |
 
-Ejemplo:
+Ejemplos:
 ```
 .venv\Scripts\python verificar_conexion.py
+.venv\Scripts\python validar_citas.py --lista datos
+umeros_demo.txt --mostrar-voz
+.venv\Scripts\python -m pytest -q
 ```
+
+## Tabla de citas (`datos/citas_prueba.csv`)
+- Ábrela en Excel. Al guardar, elige **"CSV UTF-8 (delimitado por comas)"**.
+- Pon las columnas `telefono` y `tel_trafico` como **Texto** para que Excel no borre el `+`.
+- Teléfonos: `+52` y 10 dígitos. Fecha: `AAAA-MM-DD`. Hora: `HH:MM` en formato de 24 horas (`08:30`, `16:45`).
+- `tipo_contacto`: `Operador` o `Despacho`.
+- Escribe las direcciones sin abreviaturas ("Avenida", "colonia"), para que el bot las lea bien.
+- Las columnas de resultado (`estatus`, `motivo`, etc.) se dejan vacías; las llenan los scripts.
+- Antes de llamar, los teléfonos de las citas deben estar en `config/numeros_permitidos.txt`.
 
 ## Candados de seguridad (`lib/seguridad.py`)
 Todos los scripts que llamen:

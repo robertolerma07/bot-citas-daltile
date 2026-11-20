@@ -29,7 +29,7 @@ RUTA_ENV = RAIZ / ".env"
 RUTA_LISTA_BLANCA = RAIZ / "config" / "numeros_permitidos.txt"
 
 # Formato de celular mexicano: +52 y 10 dígitos (sin el "1" antiguo de móviles)
-PATRON_TELEFONO_MX = re.compile(r"^\+52[0-9]{10}$")
+PATRON_TELEFONO_MX = re.compile(r"^\+52[0-9]{10}\Z")
 
 ZONA_CDMX = ZoneInfo("America/Mexico_City")
 HORA_INICIO = time(9, 0)

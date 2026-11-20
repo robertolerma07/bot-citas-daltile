@@ -1,0 +1,4 @@
+﻿folio,linea,contacto,tipo_contacto,telefono,origen,destino,direccion,fecha_cita,hora_cita,contacto_destino,tel_trafico,estatus,con_quien_hablo,motivo,hora_estimada,intentos,ultimo_intento,duracion_seg,id_conversacion,notas
+458217,Transportes del Valle Norte,Juan Pérez,Despacho,+525500000001,Planta Monterrey,Pisos y Azulejos del Bajío,"Avenida de los Alfareros 1520, colonia Parque Industrial Norte, León, Guanajuato",2026-12-01,08:30,Laura Gómez,+528183004500,,,,,,,,,
+458230,Fletes Rápidos de Occidente,Miguel Ángel Torres,Operador,+525500000002,Planta Monterrey,Cerámicas y Acabados Tapatíos,"Calle Ceramistas 875, colonia Las Huertas, Zapopan, Jalisco",2026-12-02,10:00,Sergio Ramírez,+528183004500,,,,,,,,,
+458244,Autotransportes Sierra Alta,Ernesto Villalobos,Operador,+525500000003,Planta Monterrey,Revestimientos del Golfo,"Boulevard de los Mangos 3100, colonia Brisas del Golfo, Veracruz, Veracruz",2026-12-03,16:45,Patricia Luna,+528183004500,,,,,,,,,

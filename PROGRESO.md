@@ -53,3 +53,49 @@
   - Se compra un número de EE. UU. con voz y se confirma que México esté habilitado.
   - Después del upgrade, Twilio ya no limita a números verificados, así que la lista blanca de los scripts queda como la protección principal.
 - **Pendiente de decisión de Roberto:** medir el tope de USD $10 como consumo y no como saldo cargado.
+
+## 2026-11-19 — Fase 1: Datos
+
+**Qué se hizo**
+- `datos/citas_prueba.csv`: 3 citas ficticias (1 Despacho, 2 Operador), con columnas de cita y de resultado. Se agregó la columna `ultimo_intento` para los reintentos de la Fase 4.
+- `datos/citas_con_errores.csv` (con errores a propósito) y `datos/numeros_demo.txt` (lista blanca de los teléfonos ficticios). Los genera `herramientas/generar_datos_ejemplo.py`.
+- `lib/formato_voz.py`: convierte los datos en texto hablado, por ejemplo:
+  - "el martes primero de diciembre";
+  - "a las cuatro cuarenta y cinco de la tarde";
+  - folio dígito por dígito;
+  - teléfono de tráfico en pares, y dígito por dígito para cuando piden repetirlo.
+- `validar_citas.py`. Revisa:
+  - columnas faltantes o repetidas;
+  - campos vacíos y valores de más;
+  - teléfonos en formato `+52` y 10 dígitos, con pistas para el `1` antiguo y el `+` que borra Excel;
+  - fechas y horas;
+  - tipo de contacto;
+  - folios repetidos, aunque cambie la escritura;
+  - lista blanca;
+  - citas con fecha pasada;
+  - estatus e intentos.
+
+  Avisa también si una dirección trae abreviaturas. Con `--mostrar-voz` enseña cómo dirá el bot cada cita.
+- `tests/test_fase1.py`: 53 pruebas automáticas (`pytest`).
+
+**Verificación**
+- El archivo bueno pasa (0 errores) y el archivo con errores falla con los 8 errores sembrados más 1 advertencia.
+- Con la lista blanca real, que todavía está vacía, el validador bloquea todo.
+- 53 de 53 pruebas pasan.
+- Una revisión independiente encontró 2 problemas importantes, ya corregidos con su prueba:
+  - El bot iba a decir "con uno minutos" a la hora :01; ahora dice "con un minuto".
+  - Un CSV con dos columnas `telefono` podía pasar la validación con un número y llamar a otro; ahora se rechaza.
+- También se corrigieron puntos menores de esa revisión:
+  - la medianoche se dice "de la noche";
+  - las letras V y W se dicen "ve" y "doble u";
+  - una fecha pasada ahora es error y no solo advertencia;
+  - las filas con valores de más se marcan;
+  - los números de fila coinciden con Excel aunque haya renglones vacíos.
+
+**Decisiones**
+- Fechas y números se formatean en Python antes de enviarlos al agente. El prompt usará `{{fecha_cita_texto}}`, `{{hora_cita_texto}}`, `{{folio_texto}}`, `{{tel_trafico_texto}}` y `{{tel_trafico_digitos}}`.
+- Para la Fase 4: los scripts de llamada deben marcar **solo** con las filas que regresa `validar()`, sin volver a leer el CSV por su cuenta, y repetir `verificar_lista_blanca()` justo antes de cada llamada.
+
+**Pendientes**
+- Roberto: cuando se definan las personas del equipo que simularán cada escenario, poner sus celulares en las citas y en `config/numeros_permitidos.txt`.
+- Si las pruebas pasan del 3 de diciembre, actualizar las fechas de las citas: el validador rechaza fechas pasadas.
