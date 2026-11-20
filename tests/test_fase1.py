@@ -14,7 +14,7 @@ import pytest
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ))
 
-from lib.formato_voz import (direccion_texto, fecha_texto, folio_texto, hora_texto,  # noqa: E402
+from lib.formato_voz import (direccion_texto, fecha_texto, folio_digitos, folio_texto, hora_texto,  # noqa: E402
                              numero_a_texto, numero_largo_a_texto, saludo, telefono_digitos,
                              telefono_pares)
 from validar_citas import validar  # noqa: E402
@@ -85,13 +85,24 @@ def test_fecha_invalida(fecha):
         fecha_texto(fecha)
 
 
-def test_folio_texto():
-    assert folio_texto("458217") == "cuatro, cinco, ocho... dos, uno, siete"
-    assert folio_texto("DAL-45") == "de, a, ele... guion, cuatro, cinco"
-    assert folio_texto("VW1") == "ve, doble u, uno"
+def test_folio_texto_en_pares():
+    assert folio_texto("458217") == "cuarenta y cinco, ochenta y dos, diecisiete"
+    assert folio_texto("45821") == "cuarenta y cinco, ochenta y dos, uno"
+    assert folio_texto("405") == "cuarenta, cinco"
+    assert folio_texto("0512") == "cero cinco, doce"
+    assert folio_texto("DAL-45") == "de, a, ele, guion, cuarenta y cinco"
     for malo in ["45#8", "", "３４"]:
         with pytest.raises(ValueError):
             folio_texto(malo)
+
+
+def test_folio_digitos():
+    assert folio_digitos("458217") == "cuatro, cinco, ocho... dos, uno, siete"
+    assert folio_digitos("DAL-45") == "de, a, ele... guion, cuatro, cinco"
+    assert folio_digitos("VW1") == "ve, doble u, uno"
+    for malo in ["45#8", "", "３４"]:
+        with pytest.raises(ValueError):
+            folio_digitos(malo)
 
 
 @pytest.mark.parametrize("n, texto", [

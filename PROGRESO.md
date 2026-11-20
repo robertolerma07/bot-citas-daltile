@@ -149,3 +149,17 @@
 - En la prueba en navegador, confirmar en *Advanced* que la entrada por teclado (DTMF) aparece activada. La API siempre regresa esa configuración, así que por API no se distingue si está activa.
 - Fase 4: confirmar en una llamada real cómo llega la tecla 1 a la transcripción.
 - Fase 4: el escenario 8 (no contesta) se marca con el estado de la llamada, porque si nadie contesta el agente nunca habla.
+
+### 2026-11-20 — Primera prueba en navegador y cierre de la Fase 2
+- **Voz definitiva:** Roberto eligió Diana - Warm, Expressive & Professional.
+- **Prueba de Roberto en navegador** (conversación `conv_9301m7vrxv5hf45vvtnd028xhb30`, 107 s, 1,668 créditos, LLM USD $0.0237):
+  - ✅ Dijo todos los datos exactamente como están en la tabla, sin inventar.
+  - ✅ La extracción dio `estatus = Confirmada` y `con_quien_hablo = Juan Pérez`.
+  - ✅ A una pregunta que no sabía contestó "no tengo esa información" y dio el teléfono de tráfico.
+  - ✅ Cuando le preguntaron, dijo que es asistente automática.
+- **Ajustes después de la prueba:**
+  - El folio dígito por dígito sonaba raro; ahora se dice en pares ("cuarenta y cinco, ochenta y dos, diecisiete") y dígito por dígito solo si piden repetirlo (`folio_digitos`).
+  - Se prohibió "¿hay algo más en lo que le pueda ayudar?", que alargaba la llamada.
+  - Después del cierre, ahora cuelga de inmediato, sin esperar respuesta.
+- **Costo:** una prueba de unos 2 minutos gastó 1,668 de los 10,000 créditos del plan Free. Con Free quedan unas 5 pruebas más; la Fase 3 (16 o más pruebas) necesita Starter.
+- **La Fase 2 cumple su criterio de salida:** el agente existe con la voz elegida y las variables configuradas, y Roberto lo probó desde el navegador.

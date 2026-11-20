@@ -148,7 +148,35 @@ def hora_texto(hora_hhmm):
 
 def folio_texto(folio):
     """
-    Folio carácter por carácter, en grupos de 3 separados por pausas:
+    Folio en pares de dígitos, como se dicta un teléfono en México:
+    '458217' -> 'cuarenta y cinco, ochenta y dos, diecisiete'.
+    Si sobra un dígito se dice solo; un par que empieza con 0 se dice 'cero X';
+    las letras y guiones se deletrean: 'DAL-45' -> 'de, a, ele, guion, cuarenta y cinco'.
+    """
+    texto = folio.strip().upper().replace(" ", "")
+    if not texto:
+        raise ValueError("El folio está vacío")
+    partes = []
+    for bloque in re.findall(r"[0-9]+|.", texto):
+        if bloque[0] in "0123456789":
+            for i in range(0, len(bloque), 2):
+                par = bloque[i:i + 2]
+                if len(par) == 1:
+                    partes.append(UNIDADES[int(par)])
+                elif par[0] == "0":
+                    partes.append(f"cero {UNIDADES[int(par[1])]}")
+                else:
+                    partes.append(numero_a_texto(int(par)))
+        elif bloque in LETRAS:
+            partes.append(LETRAS[bloque])
+        else:
+            raise ValueError(f"El folio '{folio}' trae un carácter que no se puede leer: '{bloque}'")
+    return ", ".join(partes)
+
+
+def folio_digitos(folio):
+    """
+    Folio carácter por carácter, en grupos de 3 separados por pausas, para cuando piden repetirlo:
     '458217' -> 'cuatro, cinco, ocho... dos, uno, siete'.
     """
     palabras = []
@@ -223,6 +251,7 @@ def variables_de_voz(cita):
         "hora_cita_texto": hora_texto(cita["hora_cita"]),
         "direccion_texto": direccion_texto(cita["direccion"]),
         "folio_texto": folio_texto(cita["folio"]),
+        "folio_digitos": folio_digitos(cita["folio"]),
         "tel_trafico_texto": telefono_pares(cita["tel_trafico"]),
         "tel_trafico_digitos": telefono_digitos(cita["tel_trafico"]),
     }
