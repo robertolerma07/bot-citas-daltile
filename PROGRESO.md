@@ -41,3 +41,15 @@
 - Verificar los celulares del equipo en Twilio (máximo 5).
 - Confirmar que México está habilitado en Geo permissions.
 - Llenar `config/numeros_permitidos.txt`.
+
+### Hallazgo sobre la cuenta de prueba de Twilio (2026-11-19)
+- La cuenta de prueba **no trae número gratis**: la consola pide upgrade para cualquier número.
+- **Voice → Settings** (y con eso Geo permissions) también pide upgrade.
+- **Conclusión:** la cuenta de prueba no sirve para las llamadas del bot, aunque sus credenciales sí funcionan para la API.
+- **Decisión:** el upgrade se hace justo antes de la Fase 4. Las Fases 1 a 3 no usan Twilio, y el número cobra USD $1.15 al mes desde que se compra.
+- **Al hacer el upgrade:**
+  - Roberto mete el pago; la carga mínima probable es de USD $20, que es saldo y no gasto.
+  - La recarga automática se deja **apagada**.
+  - Se compra un número de EE. UU. con voz y se confirma que México esté habilitado.
+  - Después del upgrade, Twilio ya no limita a números verificados, así que la lista blanca de los scripts queda como la protección principal.
+- **Pendiente de decisión de Roberto:** medir el tope de USD $10 como consumo y no como saldo cargado.
