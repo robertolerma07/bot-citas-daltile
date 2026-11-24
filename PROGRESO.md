@@ -204,3 +204,8 @@
 - Plan de construcción en 6 tareas: `docs/superpowers/plans/2026-11-20-seguimiento-en-ruta.md`. Se construye después de cerrar las Fases 3 a 6.
 - Costo estimado del MVP de seguimiento: unos USD $100–200 al mes para 50 líneas, contra $1,270–1,900 del esquema original.
 - Forma de construcción elegida por Roberto: **un revisor independiente por tarea** (subagent-driven-development), cuando se cierren las Fases 3 a 6.
+
+## 2026-11-24 — Respaldo en GitHub
+- Repositorio **privado**: https://github.com/robertolerma07/bot-citas-daltile (rama `master`, 13 commits subidos).
+- Antes de subir se verificó que `.env`, `config/numeros_permitidos.txt` y `resultados/` están ignorados, y que ningún archivo versionado contiene keys ni SIDs.
+- De aquí en adelante, después de cada commit se hace `git push`.
