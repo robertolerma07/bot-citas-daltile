@@ -484,16 +484,18 @@ def test_un_numero_que_no_marca_pasa_a_monitoreo_sin_detener_la_ronda(tmp_path, 
     un_latido(dom(13, 20))
     assert len(intentos_v1) == 3
     v1 = _estados(tmp_path)["V1"]
-    assert v1["estado"] == "monitoreo" and v1["aviso_pendiente"] is True and v1["intentos"] == 0
+    # Pasa a monitoreo y, como el correo de las 13:00 ya salió, su aviso sale en ese mismo latido
+    assert v1["estado"] == "monitoreo" and v1["aviso_pendiente"] is False and v1["intentos"] == 0
     assert v1["historial"][-1]["motivo"] == "No se pudo marcar a este número (falla técnica)"
     assert any("V1" in f["texto"] and "monitoreo" in f["texto"]
                for f in almacen.fallas_del_dia(DOMINGO, raiz=tmp_path))
+    a_ana = [a for a in correo.con_asunto("caso(s) nuevo(s)") if a.para == ["ana@m.com"]]
+    assert len(a_ana) == 1 and "No se pudo marcar a este número" in a_ana[0].cuerpo
     un_latido(dom(13, 30))
     assert len(intentos_v1) == 3  # ya no se le marca
     assert correo.con_asunto("Fallas de la API") == []  # no es una caída de la API
     un_latido(dom(19, 30))
-    a_ana = [a for a in correo.con_asunto("caso(s) nuevo(s)") if a.para == ["ana@m.com"]]
-    assert len(a_ana) == 1 and "No se pudo marcar a este número" in a_ana[0].cuerpo
+    assert len([a for a in correo.con_asunto("caso(s) nuevo(s)") if a.para == ["ana@m.com"]]) == 1
 
 
 def test_una_llamada_buena_reinicia_las_fallas_seguidas(tmp_path, cal):
@@ -619,17 +621,69 @@ def test_en_curso_que_nunca_termina_cuenta_sin_respuesta(tmp_path, cal):
 def test_aviso_que_falla_queda_pendiente(tmp_path, cal):
     tel, correo = _ronda_1300(tmp_path, cal, correo=Correo(resultado=False))
     assert _estados(tmp_path)["V2"]["aviso_pendiente"] is True
-    assert almacen.ya_hecho(DOMINGO, "correo_1300", raiz=tmp_path)  # no se reintenta cada 5 minutos
-    enviados = len(correo.enviados)
-    _latido(dom(13, 30), tel, correo, tmp_path, cal)
-    assert len(correo.enviados) == enviados
-    # En el siguiente envío (19:30) sale junto con los casos nuevos
+    assert almacen.ya_hecho(DOMINGO, "correo_1300", raiz=tmp_path)  # el de control no se repite
+    # El caso se reintenta en cada latido (el mismo domingo); el correo de control, no
+    _latido(dom(13, 5), tel, correo, tmp_path, cal)
+    assert len(correo.con_asunto("Control de la ronda de las 13:00")) == 1
+    assert len([a for a in correo.enviados if a.para == ["luis@m.com"]]) == 2
+    textos = [f["texto"] for f in almacen.fallas_del_dia(DOMINGO, raiz=tmp_path)]
+    assert len([t for t in textos if "luis@m.com" in t]) == 1  # la falla no se repite en la página
     correo.resultado = True
-    _latido(dom(19, 0), tel, correo, tmp_path, cal)
-    _latido(dom(19, 30), tel, correo, tmp_path, cal)
-    a_luis = [a for a in correo.enviados[enviados:] if a.para == ["luis@m.com"]]
-    assert len(a_luis) == 1 and "V2" in a_luis[0].cuerpo
+    _latido(dom(13, 10), tel, correo, tmp_path, cal)
+    assert len([a for a in correo.enviados if a.para == ["luis@m.com"]]) == 3
     assert _estados(tmp_path)["V2"]["aviso_pendiente"] is False
+    enviados = len(correo.enviados)
+    _latido(dom(13, 15), tel, correo, tmp_path, cal)
+    assert len(correo.enviados) == enviados  # ya no hay nada pendiente
+
+
+def test_caso_decidido_despues_de_la_ronda_sale_en_ese_latido(tmp_path, cal):
+    # V1 no se pudo marcar a las 13:00 (no detiene el correo de la ronda); contesta "tarde" a las 14:30
+    _aprobar(tmp_path, VIAJES_RONDA[:2])
+    tel, correo = Telefonia({"V1": TARDE, "V2": A_TIEMPO}), Correo()
+    fallar = {"V1": True}
+
+    def llamar(viaje, variables, env):
+        if fallar.get(viaje["viaje"]):
+            fallar[viaje["viaje"]] = False
+            raise ErrorTelefonia("ElevenLabs rechazó la llamada (HTTP 500)")
+        return tel.llamar(viaje, variables, env)
+
+    ejecutar_latido(dom(13, 0), cal, ENV, tmp_path, llamar, tel.esperar_resultado, correo.enviar)
+    assert almacen.ya_hecho(DOMINGO, "correo_1300", raiz=tmp_path)
+    assert correo.con_asunto("caso(s) nuevo(s)") == []
+    ejecutar_latido(dom(14, 30), cal, ENV, tmp_path, llamar, tel.esperar_resultado, correo.enviar)
+    v1 = _estados(tmp_path)["V1"]
+    assert v1["estado"] == "monitoreo" and v1["aviso_pendiente"] is False
+    casos = correo.con_asunto("caso(s) nuevo(s)")
+    assert len(casos) == 1 and casos[0].para == ["ana@m.com"] and "V1" in casos[0].cuerpo
+
+
+def test_paso_a_monitoreo_de_las_2100_despues_del_correo_1930_sale_en_ese_latido(tmp_path, cal):
+    _aprobar(tmp_path, VIAJES_RONDA[:1])
+    sin_respuesta = {**estado_inicial(), "estado": "sin_respuesta", "intentos": 1, "ultimo_intento": dom(13, 0)}
+    almacen.guardar_estados(DOMINGO, {"V1": sin_respuesta}, raiz=tmp_path)
+    almacen.marcar_hecho(DOMINGO, "correo_1300", dom(13, 0), raiz=tmp_path)
+    almacen.marcar_hecho(DOMINGO, "correo_1930", dom(19, 30), raiz=tmp_path)
+    tel, correo = Telefonia({}), Correo()
+    _latido(dom(21, 0), tel, correo, tmp_path, cal)
+    assert _estados(tmp_path)["V1"]["estado"] == "monitoreo"
+    casos = correo.con_asunto("caso(s) nuevo(s)")
+    assert len(casos) == 1 and casos[0].para == ["ana@m.com"]
+    assert _estados(tmp_path)["V1"]["aviso_pendiente"] is False
+
+
+def test_correo_que_falla_a_las_1930_sale_a_las_1935(tmp_path, cal):
+    tel, correo = _ronda_1300(tmp_path, cal)
+    _latido(dom(19, 0), tel, correo, tmp_path, cal)
+    correo.resultado = False
+    _latido(dom(19, 30), tel, correo, tmp_path, cal)
+    assert _estados(tmp_path)["V3"]["aviso_pendiente"] is True
+    correo.resultado = True
+    _latido(dom(19, 35), tel, correo, tmp_path, cal)
+    a_eva = [a for a in correo.enviados if a.para == ["eva@m.com"]]
+    assert len(a_eva) == 2 and "V3" in a_eva[-1].cuerpo
+    assert _estados(tmp_path)["V3"]["aviso_pendiente"] is False
 
 
 def test_resumen_lunes_una_vez(tmp_path, cal):

@@ -17,7 +17,9 @@ reinicia a media llamada, el siguiente latido la resuelve por su conversación. 
      una vez por caída; después se prueba con una sola llamada por latido (de preferencia a un viaje
      sin fallas) hasta que una salga. Un número que no se pudo marcar 3 veces pasa a monitoreo.
   6. Al terminar cada ronda: avisos de los casos nuevos a monitoreo y correo de control. Desde las
-     21:00, lo que no se pudo llamar pasa a monitoreo para que alguien lo siga.
+     21:00, lo que no se pudo llamar pasa a monitoreo para que alguien lo siga. Ya enviado el correo
+     de las 13:00, un caso que se decide después (o cuyo aviso falló) sale en el mismo latido del
+     domingo, sin esperar a la siguiente ronda.
   7. Lunes después de las 7:00: resumen con el Excel, una sola vez.
 
 Nunca imprime keys ni contraseñas, y la bitácora no trae teléfonos completos.
@@ -148,6 +150,7 @@ class _Latido:
         self.estados = {}
         self.bloqueados = set()  # viajes que no pasaron la lista blanca en este latido
         self.fallaron_api = set()  # viajes cuya llamada no salió en este latido: no se reintentan en él
+        self.casos_intentados = False  # ya se intentó enviar los avisos de casos en este latido
 
     # ----------------------------------------------------------------- utilidades
 
@@ -453,6 +456,10 @@ class _Latido:
         ultima = self.cal["reintentos"][-1]
         if not self.ya_hecho("correo_1930") and self.ronda_terminada(ultima, solo_primera=False):
             self.cerrar_ronda("correo_1930", ultima)
+        # Pasada la primera ronda, los casos nuevos o cuyo aviso falló salen el mismo domingo
+        if (not self.casos_intentados and self.ahora().date() == self.domingo and self.ya_hecho("correo_1300")
+                and any(self.estados[v["viaje"]].get("aviso_pendiente") for v in self.viajes)):
+            self.enviar_casos()
 
     def ronda_terminada(self, hora, solo_primera):
         """
@@ -480,7 +487,10 @@ class _Latido:
         return intentos < self.cal["max_llamadas_por_viaje"] and intentos <= len(self.cal["reintentos"])
 
     def cerrar_ronda(self, clave, hora):
-        """Avisos de los casos nuevos y correo de control. Se marca hecho aunque falle el envío."""
+        """
+        Avisos de los casos nuevos y correo de control. El de control se marca hecho aunque falle (no se
+        repite cada 5 minutos); los casos que no salieron se reintentan en los latidos siguientes.
+        """
         self.enviar_casos()
         fallas = [f["texto"] for f in almacen.fallas_del_dia(self.domingo, self.raiz)]
         detenido = self.detenido()
@@ -498,6 +508,7 @@ class _Latido:
 
     def enviar_casos(self):
         """Un aviso por persona de monitoreo con sus casos pendientes de aviso; el que falla queda pendiente."""
+        self.casos_intentados = True
         grupos = {}
         for viaje in self.viajes:
             grupos.setdefault(viaje.get("correo_monitoreo", ""), []).append(viaje)
@@ -512,7 +523,7 @@ class _Latido:
                     self.anota(f"Aviso de {len(casos)} caso(s) enviado a {destino}.")
                 else:
                     self.falla(f"No salió el aviso de {len(casos)} caso(s) a {destino}; "
-                               "se reintenta en el siguiente envío")
+                               "se reintenta en el siguiente latido")
 
     @staticmethod
     def _hora_de_iso(texto):
