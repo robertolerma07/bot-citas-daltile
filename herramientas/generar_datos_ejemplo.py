@@ -69,6 +69,8 @@ escribir("citas_con_errores.csv", CON_ERRORES,
     "# Para llamadas reales se usa config/numeros_permitidos.txt.\n"
     "+525500000001  # Juan Pérez (ficticio)\n"
     "+525500000002  # Miguel Ángel Torres (ficticio)\n"
-    "+525500000003  # Ernesto Villalobos (ficticio)\n",
+    "+525500000003  # Ernesto Villalobos (ficticio)\n"
+    "+525500000004  # operador ficticio de la lista de viajes del domingo\n"
+    "+525500000005  # operador ficticio de la lista de viajes del domingo\n",
     encoding="utf-8")
 print("Escrito datos/numeros_demo.txt")

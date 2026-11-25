@@ -1,0 +1,15 @@
+[Unit]
+Description=Pagina web del seguimiento de domingo (bot Sofia)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=sofia
+Group=sofia
+WorkingDirectory=/home/sofia/bot-citas-daltile
+ExecStart=/home/sofia/bot-citas-daltile/.venv/bin/python -m domingo.servir
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

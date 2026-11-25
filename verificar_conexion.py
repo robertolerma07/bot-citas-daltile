@@ -31,8 +31,11 @@ def revisar_sin_filtrar(nombre, funcion, *args):
         return False
 
 
-def revisar_elevenlabs(api_key):
-    """Lista los agentes (prueba de la key) y consulta el plan contratado. Regresa True si la key sirve."""
+def revisar_elevenlabs(api_key, phone_number_id=None):
+    """
+    Lista los agentes (prueba de la key), consulta el plan contratado y, si ya hay un número registrado
+    (ELEVENLABS_PHONE_NUMBER_ID), revisa que exista en ElevenLabs. Regresa True si la key sirve.
+    """
     print(f"\n=== ElevenLabs (key {enmascarar(api_key)}) ===")
     encabezados = {"xi-api-key": api_key}
 
@@ -55,6 +58,22 @@ def revisar_elevenlabs(api_key):
               f"créditos usados {s.get('character_count')} de {s.get('character_limit')}")
     else:
         print(f"⚠️  No se pudo leer el plan (HTTP {r.status_code}); la key quizá no tiene permiso de 'User'. No es grave.")
+
+    # 3) Número de Twilio registrado en ElevenLabs (lo necesita el seguimiento de domingo). Solo lectura.
+    if not phone_number_id:
+        print("ℹ️  Número de teléfono en ElevenLabs: pendiente (ELEVENLABS_PHONE_NUMBER_ID vacío en .env; "
+              "se llena con herramientas/registrar_numero.py). No es un error.")
+    else:
+        r = requests.get(f"{API_ELEVENLABS}/v1/convai/phone-numbers/{phone_number_id}", headers=encabezados,
+                         timeout=20)
+        if r.status_code == 200:
+            n = r.json()
+            print(f"✅ Número registrado en ElevenLabs: …{(n.get('phone_number') or '')[-4:]} "
+                  f"(id …{phone_number_id[-6:]})")
+        else:
+            print(f"❌ ELEVENLABS_PHONE_NUMBER_ID (…{phone_number_id[-6:]}) no existe en ElevenLabs "
+                  f"(HTTP {r.status_code}). Registra el número con herramientas/registrar_numero.py.")
+            return False
     return True
 
 
@@ -110,11 +129,13 @@ def revisar_twilio(sid, token, numero):
 def main():
     print("Verificación de conexión — solo lectura, sin llamadas ni gastos.")
     valores, faltantes = cargar_env(
-        ["ELEVENLABS_API_KEY", "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_NUMERO"]
+        ["ELEVENLABS_API_KEY", "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_NUMERO",
+         "ELEVENLABS_PHONE_NUMBER_ID"]
     )
     # Cada servicio se revisa solo si sus datos ya están en .env (TWILIO_NUMERO es opcional aquí).
     if "ELEVENLABS_API_KEY" in valores:
-        ok_el = revisar_sin_filtrar("ElevenLabs", revisar_elevenlabs, valores["ELEVENLABS_API_KEY"])
+        ok_el = revisar_sin_filtrar("ElevenLabs", revisar_elevenlabs, valores["ELEVENLABS_API_KEY"],
+                                    valores.get("ELEVENLABS_PHONE_NUMBER_ID"))
     else:
         print("\n❌ ElevenLabs: falta ELEVENLABS_API_KEY en el archivo .env.")
         ok_el = False

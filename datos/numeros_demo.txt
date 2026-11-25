@@ -3,3 +3,5 @@
 +525500000001  # Juan Pérez (ficticio)
 +525500000002  # Miguel Ángel Torres (ficticio)
 +525500000003  # Ernesto Villalobos (ficticio)
++525500000004  # operador ficticio de la lista de viajes del domingo
++525500000005  # operador ficticio de la lista de viajes del domingo

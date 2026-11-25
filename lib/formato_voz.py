@@ -230,10 +230,15 @@ def telefono_digitos(telefono):
 
 
 def saludo(hora_hhmm):
-    """Saludo según la hora de la llamada: 'Buenos días' (antes de 12), 'Buenas tardes' (12 a 19) o 'Buenas noches'."""
+    """
+    Saludo según la hora de la llamada: 'Buenas noches' (antes de las 5 o desde las 19),
+    'Buenos días' (5 a 12) o 'Buenas tardes' (12 a 19).
+    """
     if not PATRON_HORA.fullmatch(hora_hhmm) or int(hora_hhmm[:2]) > 23:
         raise ValueError(f"Hora inválida: {hora_hhmm} (debe ser HH:MM)")
     h = int(hora_hhmm[:2])
+    if h < 5:
+        return "Buenas noches"
     if h < 12:
         return "Buenos días"
     if h < 19:

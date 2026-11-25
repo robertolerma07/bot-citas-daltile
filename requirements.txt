@@ -6,3 +6,5 @@ tzdata>=2024.1        # zona horaria de Ciudad de México en Windows
 pandas>=2.2           # manejo de CSV/Excel (Fase 1 en adelante)
 openpyxl>=3.1         # escribir Excel (Fase 5)
 pytest>=8.0          # pruebas automáticas
+flask>=3.0         # página web del domingo
+waitress>=3.0      # servidor de la página del domingo

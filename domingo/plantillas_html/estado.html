@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block contenido %}
+<section>
+  <h1>Domingo para aprobar</h1>
+  {% if para_aprobar %}
+    <p>Próxima lista: domingo <strong>{{ para_aprobar }}</strong>.</p>
+    {% if vigente %}
+      <div class="bien">Aprobada por <strong>{{ vigente.quien }}</strong> el {{ vigente.cuando }}: <strong>{{ vigente.total }} llamadas</strong>.</div>
+    {% else %}
+      <div class="aviso">No hay lista aprobada para ese domingo.</div>
+    {% endif %}
+  {% endif %}
+  {% include "subir.html" %}
+</section>
+
+{% if en_curso %}
+<section>
+  <h1>Domingo en curso: {{ en_curso }}</h1>
+  {% if detenido %}<div class="mal"><strong>Llamadas detenidas</strong> por {{ detenido.quien }} ({{ detenido.cuando }}). No se hará ninguna llamada más.</div>{% endif %}
+  {% if aprobacion_en_curso %}
+    <p>Lista aprobada por {{ aprobacion_en_curso.quien }} el {{ aprobacion_en_curso.cuando }}: {{ aprobacion_en_curso.total }} llamadas.</p>
+    <div class="tabla">
+    <table>
+      <tr><th>Viaje</th><th>Operador</th><th>Teléfono</th><th>Cita</th><th>Estado</th><th>Llamadas</th></tr>
+      {% for f in filas %}
+      <tr><td>{{ f.viaje }}</td><td>{{ f.operador }}</td><td>{{ f.telefono }}</td><td>{{ f.cita }}</td>
+          <td class="estado-{{ f.estado }}">{{ f.estado_texto }}</td><td>{{ f.intentos }}</td></tr>
+      {% endfor %}
+    </table>
+    </div>
+  {% else %}
+    <div class="aviso">No hay lista aprobada para este domingo: no se llamará a nadie.</div>
+  {% endif %}
+
+  {% if pendientes %}
+  <h2>Avisos pendientes</h2>
+  <p class="chico">Casos que pasaron a monitoreo y cuyo correo todavía no se ha podido enviar (se reintenta solo).</p>
+  <ul>{% for f in pendientes %}<li>Viaje {{ f.viaje }} ({{ f.operador }}) para {{ f.monitoreo or 'control' }}</li>{% endfor %}</ul>
+  {% endif %}
+
+  {% if fallas %}
+  <h2>Fallas del día</h2>
+  <ul>{% for f in fallas %}<li>{{ f.cuando }}: {{ f.texto }}</li>{% endfor %}</ul>
+  {% endif %}
+
+  {% if not detenido %}
+  <h2>Detener las llamadas de hoy</h2>
+  <p class="chico">Úsalo solo si se aprobó una lista equivocada. No se podrá volver a llamar este domingo y se avisa por correo.</p>
+  <form method="post" action="/detener">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <label for="quien">Tu nombre (quién detiene)</label>
+    <input id="quien" type="text" name="nombre" maxlength="60" required>
+    <button class="peligro" type="submit">Detener las llamadas de hoy</button>
+  </form>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

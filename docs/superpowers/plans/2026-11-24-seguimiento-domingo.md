@@ -60,7 +60,7 @@ manda sobre `2026-11-20-seguimiento-en-ruta-design.md` y reemplaza al plan `2026
 
 ---
 
-### Tarea 1: Calendario y lista de viajes (Excel)
+### Task 1: Calendario y lista de viajes (Excel)
 
 **Archivos:**
 - Crear: `config/domingo.json`, `domingo/__init__.py`, `domingo/calendario.py`, `domingo/viajes.py`,
@@ -121,7 +121,7 @@ manda sobre `2026-11-20-seguimiento-en-ruta-design.md` y reemplaza al plan `2026
 - [ ] **Paso 5:** La misma corrida debe PASAR y todo `pytest -q` debe seguir verde.
 - [ ] **Paso 6:** Commit y push: `Domingo: calendario y lista de viajes en Excel`.
 
-### Tarea 2: Reglas (lógica pura)
+### Task 2: Reglas (lógica pura)
 
 **Archivos:**
 - Crear: `domingo/reglas.py`
@@ -172,7 +172,7 @@ manda sobre `2026-11-20-seguimiento-en-ruta-design.md` y reemplaza al plan `2026
 - [ ] **Paso 4:** Las pruebas deben PASAR.
 - [ ] **Paso 5:** Commit y push: `Domingo: reglas de llamada y decisión`.
 
-### Tarea 3: Agente "Sofía - seguimiento" como código
+### Task 3: Agente "Sofía - seguimiento" como código
 
 **Archivos:**
 - Crear: `agente_seguimiento/prompt.md`, `agente_seguimiento/config.json`
@@ -221,7 +221,7 @@ manda sobre `2026-11-20-seguimiento-en-ruta-design.md` y reemplaza al plan `2026
   con la cita ya pasada. Anota en `PROGRESO.md` los IDs, la duración y si la extracción salió como se esperaba.
 - [ ] **Paso 6:** Commit y push: `Domingo: agente Sofía - seguimiento como código`.
 
-### Tarea 4: Aprobación y estado guardados
+### Task 4: Aprobación y estado guardados
 
 **Archivos:**
 - Crear: `domingo/almacen.py`
@@ -256,7 +256,7 @@ manda sobre `2026-11-20-seguimiento-en-ruta-design.md` y reemplaza al plan `2026
 - [ ] **Paso 4:** Las pruebas deben PASAR.
 - [ ] **Paso 5:** Commit y push: `Domingo: aprobación y estado guardados`.
 
-### Tarea 5: Llamadas por Twilio y lectura del resultado
+### Task 5: Llamadas por Twilio y lectura del resultado
 
 **Archivos:**
 - Crear: `domingo/telefonia.py`, `herramientas/registrar_numero.py`
@@ -291,7 +291,7 @@ manda sobre `2026-11-20-seguimiento-en-ruta-design.md` y reemplaza al plan `2026
 - [ ] **Paso 4:** Las pruebas deben PASAR y todo `pytest -q` verde.
 - [ ] **Paso 5:** Commit y push: `Domingo: llamadas por Twilio y lectura del resultado`.
 
-### Tarea 6: Avisos por correo y Excel del resumen
+### Task 6: Avisos por correo y Excel del resumen
 
 **Archivos:**
 - Crear: `domingo/avisos.py`
@@ -334,7 +334,7 @@ manda sobre `2026-11-20-seguimiento-en-ruta-design.md` y reemplaza al plan `2026
 - [ ] **Paso 4:** Las pruebas deben PASAR.
 - [ ] **Paso 5:** Commit y push: `Domingo: avisos por correo y resumen en Excel`.
 
-### Tarea 7: El latido
+### Task 7: El latido
 
 **Archivos:**
 - Crear: `domingo/latido.py`
@@ -383,7 +383,7 @@ manda sobre `2026-11-20-seguimiento-en-ruta-design.md` y reemplaza al plan `2026
 - [ ] **Paso 4:** Las pruebas deben PASAR y todo `pytest -q` verde.
 - [ ] **Paso 5:** Commit y push: `Domingo: latido que llama, reintenta y avisa`.
 
-### Tarea 8: La página web
+### Task 8: La página web
 
 **Archivos:**
 - Crear: `domingo/pagina.py`, `domingo/plantillas_html/` (base, entrar, subir, revisar, estado), `domingo/servir.py`
@@ -423,7 +423,7 @@ manda sobre `2026-11-20-seguimiento-en-ruta-design.md` y reemplaza al plan `2026
 - [ ] **Paso 4:** Las pruebas deben PASAR y todo `pytest -q` verde.
 - [ ] **Paso 5:** Commit y push: `Domingo: página para subir, aprobar y detener`.
 
-### Tarea 9: Servidor de prueba en Lightsail y ensayo
+### Task 9: Servidor de prueba en Lightsail y ensayo
 
 **Archivos:**
 - Crear: `docs/guia-servidor-domingo.md`, `despliegue/Caddyfile`, `despliegue/bot-domingo-pagina.service`,

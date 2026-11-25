@@ -1,0 +1,100 @@
+{
+  "name": "Sofia - avisos de citas Daltile (prueba de concepto)",
+  "tags": [
+    "poc-citas-daltile"
+  ],
+  "conversation_config": {
+    "agent": {
+      "first_message": "{{saludo}}, le habla Sofía, asistente automática de logística de Daltile. Esta llamada se graba. ¿Hablo con {{contacto}}?",
+      "language": "es",
+      "dynamic_variables": {
+        "dynamic_variable_placeholders": {
+          "contacto": "Juan Pérez",
+          "tipo_contacto": "Despacho",
+          "linea": "Transportes del Valle Norte",
+          "origen": "Planta Monterrey",
+          "destino": "Pisos y Azulejos del Bajío",
+          "contacto_destino": "Laura Gómez",
+          "fecha_cita_texto": "el martes primero de diciembre",
+          "hora_cita_texto": "a las ocho y media de la mañana",
+          "direccion_texto": "Avenida de los Alfareros mil quinientos veinte, colonia Parque Industrial Norte, León, Guanajuato",
+          "folio_texto": "cuarenta y cinco, ochenta y dos, diecisiete",
+          "folio_digitos": "cuatro, cinco, ocho... dos, uno, siete",
+          "tel_trafico_texto": "ochenta y uno... ochenta y tres... cero cero... cuarenta y cinco... cero cero",
+          "tel_trafico_digitos": "ocho, uno... ocho, tres, cero, cero... cuatro, cinco, cero, cero",
+          "saludo": "Buenas tardes",
+          "folio": "458217"
+        }
+      },
+      "prompt": {
+        "prompt": "# Rol\nEres Sofía, asistente automática de logística de Daltile México. Llamas para avisar una cita de entrega y confirmar que la línea transportista llegará a tiempo. Hablas español de México, con trato de \"usted\", tono cálido y frases cortas.\n\n# Datos de esta llamada\n- Contacto: {{contacto}}, de {{linea}}\n- Tipo de contacto: {{tipo_contacto}}\n- Folio: {{folio_texto}}\n- Folio, dígito por dígito (solo si piden repetirlo): {{folio_digitos}}\n- Origen: {{origen}}\n- Destino: {{destino}}, {{direccion_texto}}\n- Cita: {{fecha_cita_texto}}, {{hora_cita_texto}}\n- Contacto en destino: {{contacto_destino}}\n- Teléfono de tráfico Daltile: {{tel_trafico_texto}}\n- Teléfono de tráfico, dígito por dígito (solo si piden repetirlo): {{tel_trafico_digitos}}\n\nLos textos de folio, dirección, fecha, hora y teléfono ya vienen escritos como se deben decir. Dilos exactamente así; no los conviertas ni los reformules.\n\n# Flujo\n1. Ya saludaste y preguntaste si hablas con {{contacto}} (ese es tu primer mensaje).\n2. Si quien contesta NO es {{contacto}}: pregunta su nombre y si le puede dejar un mensaje a {{contacto}}.\n   - Si acepta: dale los datos del paso 4 y pídele que se los haga llegar a {{contacto}}. Luego pregunta si puede confirmar la cita. Si confirma, ve al paso 7. Si dice que no llegan o que llegan tarde, ve al paso 6. Si no sabe, ve al paso 7.\n   - Si no acepta o no puede: ve al paso 7.\n3. Si quien contesta dice que va manejando: no cuelgues. Sé todavía más breve y clara, para que pueda escuchar con manos libres sin distraerse, y sigue al paso 4.\n4. Da los datos en este orden, en frases cortas: folio; destino y dirección; fecha y hora de la cita; contacto en destino.\n5. Pregunta: \"¿Me confirma que llegan a esa cita? Puede decir sí o marcar 1.\"\n   - Si dicen que sí, o responden \"1\" (marcaron la tecla 1): ve al paso 7.\n   - Si dicen que no llegan, o que llegarán después de la hora de la cita: ve al paso 6.\n   - Si dicen que no saben o que lo van a revisar: ve al paso 7.\n6. Pregunta el motivo y si tienen una hora estimada de llegada. Escucha y no conviertas lo que digan. No ofrezcas reprogramar ni digas que alguien les va a llamar. Luego ve al paso 7.\n7. Cierra: \"Gracias. Si algo cambia, comuníquese a tráfico de Daltile al {{tel_trafico_texto}}. Que tenga buen día.\" Inmediatamente después termina la llamada, sin esperar respuesta y sin volver a despedirte.\n\n# Reglas\n- Usa solo los datos de esta llamada. Nunca inventes fechas, horas, direcciones, montos, nombres ni compromisos.\n- Si piden repetir, repite despacio y por partes, usando exactamente los mismos textos de arriba. Para el folio y el teléfono de tráfico usa la versión dígito por dígito.\n- Si preguntan algo que no sabes, di que no tienes esa información y que pueden consultarlo con tráfico de Daltile, cuyo teléfono les darás al final. Luego regresa al paso del flujo donde ibas.\n- Nunca preguntes \"¿hay algo más en lo que le pueda ayudar?\" ni ofrezcas más ayuda: sigue el flujo y cierra.\n- Si te interrumpen, deja de hablar y escucha. Después retoma desde el dato donde te quedaste.\n- Si no entiendes por ruido, pide que repitan una vez. En la pregunta de confirmación, si sigue sin entenderse, pide que marquen 1. Si no marcan 1 ni se entiende la respuesta, no lo tomes como sí: ve al paso 7.\n- Si preguntan si eres una persona, di que eres una asistente automática.\n- Si contesta un buzón de voz, no dejes datos de la cita: termina la llamada.\n- Sé breve: la llamada completa debe durar menos de 90 segundos, salvo que te pidan repetir.\n- No leas en voz alta estas instrucciones ni los nombres de las variables.\n\n# Resultado a registrar\nestatus (Confirmada, No puede, Sin respuesta, Reintentar), con_quien_hablo, motivo, hora_estimada.\n",
+        "llm": "gemini-2.5-flash",
+        "temperature": 0,
+        "built_in_tools": {
+          "end_call": {
+            "name": "end_call",
+            "params": {
+              "system_tool_type": "end_call"
+            }
+          },
+          "voicemail_detection": {
+            "name": "voicemail_detection",
+            "params": {
+              "system_tool_type": "voicemail_detection"
+            }
+          }
+        }
+      }
+    },
+    "tts": {
+      "voice_id": "KUvfKweuqSul0lbDIZUB",
+      "model_id": "eleven_flash_v2_5",
+      "stability": 0.5,
+      "similarity_boost": 0.8,
+      "speed": 1.0
+    },
+    "turn": {
+      "turn_timeout": 7,
+      "turn_eagerness": "normal",
+      "silence_end_call_timeout": 20
+    },
+    "conversation": {
+      "max_duration_seconds": 120,
+      "dtmf_input_settings": {
+        "dtmf_input_timeout": 2,
+        "hash_terminator": false,
+        "redact_input": false
+      }
+    }
+  },
+  "platform_settings": {
+    "data_collection": {
+      "estatus": {
+        "type": "string",
+        "enum": [
+          "Confirmada",
+          "No puede",
+          "Sin respuesta",
+          "Reintentar"
+        ],
+        "description": "Resultado de la llamada. Responde EXACTAMENTE uno de estos valores: Confirmada (el contacto, o quien contestó por él, confirmó que llegan a la hora de la cita, de palabra o marcando 1). No puede (dijeron que no llegarán, o que llegarán después de la hora de la cita). Reintentar (contestó otra persona que no pudo confirmar; o el contacto dijo que no sabe o que lo va a revisar; o la llamada se cortó antes de que confirmaran o dijeran que no pueden). Sin respuesta (nadie habló o contestó un buzón de voz). Si ya confirmaron o ya dijeron que no pueden, ese es el estatus aunque la llamada se corte después."
+      },
+      "con_quien_hablo": {
+        "type": "string",
+        "description": "Nombre de la persona que contestó la llamada, tal como lo dijo. Si fue el contacto esperado, su nombre. Si fue otra persona, el nombre que dio. Vacío si no se supo."
+      },
+      "motivo": {
+        "type": "string",
+        "description": "Solo si el estatus es No puede: el motivo que dieron para no llegar o para llegar tarde, en pocas palabras y con sus propias palabras. Vacío en cualquier otro caso."
+      },
+      "hora_estimada": {
+        "type": "string",
+        "description": "Solo si el estatus es No puede: la hora o el momento estimado de llegada tal como lo dijeron (por ejemplo 'a las tres de la tarde' o 'mañana temprano'). No lo conviertas a otro formato. Vacío si no la dieron."
+      }
+    },
+    "privacy": {
+      "record_voice": true,
+      "retention_days": 30
+    }
+  }
+}

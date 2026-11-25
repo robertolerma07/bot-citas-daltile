@@ -1,0 +1,5 @@
+# Caddy: pone HTTPS (candadito) delante de la página del bot y la manda al puerto 8080.
+# instalar.sh cambia DOMINIO_AQUI por tu dirección, por ejemplo 3-140-10-20.sslip.io
+DOMINIO_AQUI {
+	reverse_proxy 127.0.0.1:8080
+}

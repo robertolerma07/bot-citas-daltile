@@ -1,0 +1,65 @@
+{
+  "_comentario": "Configuración del agente Sofía - seguimiento (domingo). El prompt se toma de agente_seguimiento/prompt.md y las variables de ejemplo del primer viaje de datos/viajes_prueba.xlsx. Voz, LLM, temperatura, tecla 1 y privacidad son las mismas del agente de avisos (agente/config.json). Para aplicar cambios: .venv\\Scripts\\python agente\\subir_agente.py --agente seguimiento",
+  "name": "Sofia - seguimiento de domingo Daltile (MVP)",
+  "tags": ["seguimiento-domingo-daltile"],
+  "voz": {
+    "voice_id": "KUvfKweuqSul0lbDIZUB",
+    "public_owner_id": "4520ecf28dba07d584adfa2e3d41fa8d7c722a0128a2e57324aad9a3b2f97e1d",
+    "nombre": "Diana - Warm, Expressive & Professional (elegida por Roberto el 2026-11-20)",
+    "model_id": "eleven_flash_v2_5",
+    "stability": 0.5,
+    "similarity_boost": 0.8,
+    "speed": 1.0
+  },
+  "idioma": "es",
+  "llm": "gemini-2.5-flash",
+  "temperatura": 0,
+  "primer_mensaje": "{{saludo}}, le habla Sofía, asistente automática de Daltile. Esta llamada se graba. ¿Hablo con {{operador}}?",
+  "duracion_maxima_seg": 60,
+  "turnos": {
+    "turn_timeout": 7,
+    "turn_eagerness": "normal",
+    "silence_end_call_timeout": 20
+  },
+  "dtmf": {
+    "dtmf_input_timeout": 2,
+    "hash_terminator": false,
+    "redact_input": false
+  },
+  "privacidad": {
+    "record_voice": true,
+    "retention_days": 30
+  },
+  "extraccion_de_datos": {
+    "hablo_con_operador": {
+      "type": "boolean",
+      "description": "true solo si contestó el operador al que Sofía buscó (dijo que sí era él, o tomó la llamada cuando se lo pidieron) y respondió por su entrega. false si nadie habló, contestó un buzón de voz o una grabación, contestó otra persona y el operador no tomó la llamada, o la llamada se cortó antes de saber si era él."
+    },
+    "llega_antes_de_la_cita": {
+      "type": "string",
+      "enum": ["sí", "no", "no sabe"],
+      "description": "Responde EXACTAMENTE uno de estos valores. sí: solo si el operador dijo ÉL MISMO una hora clara de llegada, o dijo él mismo 'antes de las' una hora, que no es posterior a la hora de la cita que dijo Sofía, Y lo confirmó cuando Sofía le repitió ese día y esa hora. Un 'sí' a secas, o un 'sí' sin hora clara después de que Sofía le preguntó a qué hora calcula llegar, NO es sí: es no sabe. no: dijo que no llega a tiempo, que llega después de la hora de la cita o en un día posterior, o lo que confirmó al repetirle el día y la hora cae después de la cita. no sabe: cualquier otro caso: respuesta vaga ('creo que sí', 'a ver si llego', 'temprano', 'más tarde', 'depende del tráfico', 'no sé', 'ahorita', 'en un rato' y parecidas), no dio una hora clara, no confirmó cuando Sofía le repitió el día y la hora, no se entendió, la llamada se cortó antes de que confirmara, Sofía preguntó si ya realizó la entrega (la cita ya había pasado), o no habló con el operador."
+    },
+    "entrega_realizada": {
+      "type": "string",
+      "enum": ["sí", "no", "no aplica"],
+      "description": "Responde EXACTAMENTE uno de estos valores. Solo cuenta cuando Sofía preguntó si ya realizó la entrega con el cliente (la cita ya había pasado). sí: el operador dijo con claridad que ya entregó. no: dijo que todavía no entrega, respondió algo vago o que no se entendió, o la llamada se cortó antes de que respondiera. no aplica: Sofía no preguntó por la entrega (le preguntó si va a llegar a tiempo), o no habló con el operador."
+    },
+    "hora_estimada_dicha": {
+      "type": "string",
+      "description": "El momento en que el operador dijo que llega (o que llegó), tal como lo dijo y con sus propias palabras, por ejemplo 'como a las siete de la mañana', 'mañana temprano', 'en dos horas'. Si lo corrigió al confirmar, lo último que dijo. Vacío si no dio ninguna hora ni momento."
+    },
+    "hora_estimada": {
+      "type": "string",
+      "description": "La hora estimada de llegada en formato HH:MM de 24 horas (por ejemplo 07:00, 07:30 o 15:00), solo si el operador dijo él mismo la hora y se sabe si es de la mañana, de la tarde o de la noche: porque él lo dijo ('a las siete de la mañana' es 07:00, 'a las tres de la tarde' es 15:00) o porque confirmó la parte del día cuando Sofía se la repitió ('a las seis' y después sí a '¿a las seis de la mañana?' es 06:00). Si dijo 'antes de las siete de la mañana', es 07:00. Vacío si no dio hora, si fue vaga ('creo que sí', 'a ver si llego', 'temprano', 'más tarde', 'depende del tráfico', 'no sé', 'ahorita', 'en un rato' y parecidas), si hay que calcularla ('en dos horas'), o si no se sabe la parte del día porque no la dijo ni la confirmó. Nunca la tomes de la hora de la cita ni del límite que dijo Sofía. Nunca la inventes ni la calcules."
+    },
+    "fecha_estimada": {
+      "type": "string",
+      "description": "La fecha en que el operador dijo que llega, en formato AAAA-MM-DD (por ejemplo 2026-11-30), solo si dijo o confirmó un día claro: usa el día y la fecha que Sofía repitió al confirmar (por ejemplo 'el lunes treinta de noviembre' es 2026-11-30 si la llamada es de 2026). El año es el de la fecha de la llamada; si el día dicho es en enero y la llamada es en diciembre, es el año siguiente. Vacío si no dijo ningún día ni lo confirmó, o si no queda claro qué día es. Nunca la inventes."
+    },
+    "motivo": {
+      "type": "string",
+      "description": "Solo si el operador dijo que no llega a tiempo, que va retrasado o que no ha entregado: lo que dijo que pasó, en pocas palabras y con sus propias palabras. Vacío en cualquier otro caso."
+    }
+  }
+}

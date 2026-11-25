@@ -1,0 +1,13 @@
+{
+  "ensayo": true,
+  "aprobar_hasta": "12:00",
+  "ronda": "13:00",
+  "reintentos": ["19:00", "19:30"],
+  "max_llamadas_por_viaje": 3,
+  "minutos_entre_llamadas_mismo_telefono": 10,
+  "ventana_llamadas": {"desde": "13:00", "hasta": "21:00"},
+  "rango_citas": {"desde": "13:00", "hasta": "13:00"},
+  "resumen_lunes": "07:00",
+  "limite_dia_por_omision": "16:00",
+  "tope_llamadas_por_domingo": 150
+}

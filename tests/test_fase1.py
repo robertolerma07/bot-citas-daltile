@@ -132,6 +132,7 @@ def test_saludo_hora_invalida():
 @pytest.mark.parametrize("hora, texto", [
     ("09:00", "Buenos días"), ("11:59", "Buenos días"), ("12:00", "Buenas tardes"),
     ("18:59", "Buenas tardes"), ("19:00", "Buenas noches"),
+    ("00:30", "Buenas noches"), ("04:59", "Buenas noches"), ("05:00", "Buenos días"),
 ])
 def test_saludo(hora, texto):
     assert saludo(hora) == texto
