@@ -162,6 +162,14 @@ def test_pregunta_que_paso_antes_de_confirmar_si_va_retrasado():
     assert "a las doce" in prompt[paso_6:paso_7]
 
 
+def test_cita_pasada_pregunta_motivo_y_hora_por_separado():
+    # Prueba en navegador del 2026-11-25: dijo "¿Qué pasó? ¿Y a qué hora calcula llegar?" en un solo turno
+    prompt = leer_prompt(SEGUIMIENTO)
+    paso_9 = prompt[prompt.index("9. Pregunta"):prompt.index("## Cierre")]
+    assert "no juntes las dos preguntas" in paso_9
+    assert paso_9.index("¿Qué pasó?") < paso_9.index("¿A qué hora calcula llegar?")
+
+
 def test_cierre_y_end_call_van_juntos():
     # Prueba en navegador del 2026-11-25: se despidió y la llamada siguió abierta hasta los 60 s
     prompt = leer_prompt(SEGUIMIENTO)

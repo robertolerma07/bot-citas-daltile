@@ -262,3 +262,10 @@ Rama `domingo-mvp`, juntada con `master` el 2026-11-25 tras la revisión final (
 - Teléfono de Monitoreo en 2-2-3-3 y "¡Muchas gracias!" se escucharon bien.
 - Detalle menor: usó `end_call` al terminar el cierre, pero un "mhm" del operador justo al final la hizo repetir "¡Que tenga muy buen día!" antes de colgar (la llamada igual terminó a los 47 s). Se deja así por ahora; si molesta, se acorta el cierre.
 - Créditos: 6,681 de 10,000 usados. Falta probar "ya entregué" (cita pasada).
+
+### 2026-11-25 — Quinta prueba: cita ya pasada
+- Se agregó `subir_agente.py --agente seguimiento --cita-ya-paso`: carga el viaje de ejemplo como si la llamada fuera el lunes 30 a las 10:00 (dos horas después de la cita de las 8:00). Sin la opción se carga el ejemplo normal.
+- Conversación `conv_1701m8aa1309fmjbdxt9ejw95w8c` (55 s, 1,088 créditos): dijo "que tenía cita el lunes treinta de noviembre a las ocho de la mañana. ¿Ya realizó la entrega con el cliente?" → "No, todavía no" → "No sé a qué hora voy a llegar. Tengo una falla mecánica" → no confirmó nada y cerró. Extracción `entrega_realizada = no`, `motivo = Tengo una falla mecánica.`, sin hora; decisión del bot: **monitoreo**, correcta.
+- Corrección: juntó "¿Qué pasó? ¿Y a qué hora calcula llegar?" en un turno. El paso 9 ahora pide preguntar el motivo, esperar la respuesta y después la hora (sin volverla a preguntar si ya la dio). No se volvió a probar en el navegador para ahorrar créditos; se revisa en el ensayo.
+- Una llamada anterior (`conv_1601…`, 22 s, 352 créditos) se cortó al inicio sin datos; decisión sin_respuesta, como debe.
+- El agente quedó otra vez con el ejemplo normal (cita por venir). Créditos: unos 8,100 de 10,000 usados.
