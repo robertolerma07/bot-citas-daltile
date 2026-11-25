@@ -102,8 +102,9 @@ def _cifra_contradice(viaje, resultado):
 def decidir(viaje, resultado, momento_llamada):
     """
     Qué significa el resultado de una llamada: "sin_respuesta", "a_tiempo", "entregado" o "monitoreo".
-    Nunca regresa "a_tiempo" salvo que el operador haya dicho "sí" llega antes de la cita y ninguna
-    cifra extraída lo contradiga.
+    Nunca regresa "a_tiempo" salvo que el operador haya dicho "sí" llega antes de la cita, haya dado
+    una hora clara (HH:MM) no posterior al límite y ninguna fecha extraída lo contradiga. "Sí" sin
+    hora es una respuesta vaga: pasa a monitoreo (5.5 del diseño).
     """
     if resultado.get("hablo_con_operador") is not True:
         return "sin_respuesta"
@@ -113,9 +114,20 @@ def decidir(viaje, resultado, momento_llamada):
 
     if _texto(resultado.get("llega_antes_de_la_cita")) != "sí":
         return "monitoreo"
+    if not _hora_clara(resultado.get("hora_estimada")):
+        return "monitoreo"
     if _cifra_contradice(viaje, resultado):
         return "monitoreo"
     return "a_tiempo"
+
+
+def _hora_clara(valor):
+    """True si la hora extraída es un HH:MM válido (vacía o mal formada: el operador no dio hora)."""
+    try:
+        hora_de(valor or "")
+    except (TypeError, ValueError):
+        return False
+    return True
 
 
 def _texto(valor):

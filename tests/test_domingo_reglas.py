@@ -119,7 +119,8 @@ def test_no_hablo_es_sin_respuesta():
 
 
 @pytest.mark.parametrize("hora,fecha,esperado", [
-    ("", "", "a_tiempo"),
+    ("", "", "monitoreo"),               # "sí" sin hora no basta (5.5: dio una hora igual o anterior)
+    ("", "2026-11-29", "monitoreo"),     # la víspera pero sin hora: tampoco
     ("08:00", "2026-11-30", "a_tiempo"),
     ("08:01", "2026-11-30", "monitoreo"),
     ("23:30", "2026-11-29", "a_tiempo"),
@@ -127,8 +128,9 @@ def test_no_hablo_es_sin_respuesta():
     ("", "2026-12-01", "monitoreo"),
     ("09:00", "", "monitoreo"),          # hora tarde sin fecha: se asume el día de la cita
     ("07:30", "", "a_tiempo"),
-    ("basura", "tampoco", "a_tiempo"),   # cifras mal formadas = sin cifra, no contradicen
-    ("25:99", "2026-13-45", "a_tiempo"),
+    ("basura", "tampoco", "monitoreo"),  # hora mal formada = sin hora: nunca a tiempo
+    ("25:99", "2026-13-45", "monitoreo"),
+    ("07:30", "tampoco", "a_tiempo"),    # una fecha mal formada no contradice una hora clara
 ])
 def test_si_llega_antes(hora, fecha, esperado):
     r = resultado(llega_antes_de_la_cita="sí", hora_estimada=hora, fecha_estimada=fecha)
