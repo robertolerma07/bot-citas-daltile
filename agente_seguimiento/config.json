@@ -38,7 +38,7 @@
     "llega_antes_de_la_cita": {
       "type": "string",
       "enum": ["sí", "no", "no sabe"],
-      "description": "Responde EXACTAMENTE uno de estos valores. sí: solo si el operador dijo con claridad que llega a tiempo (a la hora de la cita o antes) Y lo confirmó cuando Sofía le repitió el día y la hora. no: dijo que no llega a tiempo, que llega después de la hora de la cita o en un día posterior, o lo que confirmó al repetirle el día y la hora cae después de la cita. no sabe: cualquier otro caso: respuesta vaga ('creo que sí', 'depende del tráfico', 'a ver si llego'), no confirmó cuando Sofía le repitió el día y la hora, no se entendió, la llamada se cortó antes de que confirmara, Sofía preguntó si ya realizó la entrega (la cita ya había pasado), o no habló con el operador."
+      "description": "Responde EXACTAMENTE uno de estos valores. sí: solo si el operador dijo ÉL MISMO una hora clara de llegada, o dijo él mismo 'antes de las' una hora, que no es posterior a la hora de la cita que dijo Sofía, Y lo confirmó cuando Sofía le repitió ese día y esa hora. Un 'sí' a secas, o un 'sí' sin hora clara después de que Sofía le preguntó a qué hora calcula llegar, NO es sí: es no sabe. no: dijo que no llega a tiempo, que llega después de la hora de la cita o en un día posterior, o lo que confirmó al repetirle el día y la hora cae después de la cita. no sabe: cualquier otro caso: respuesta vaga ('creo que sí', 'a ver si llego', 'temprano', 'más tarde', 'depende del tráfico', 'no sé', 'ahorita', 'en un rato' y parecidas), no dio una hora clara, no confirmó cuando Sofía le repitió el día y la hora, no se entendió, la llamada se cortó antes de que confirmara, Sofía preguntó si ya realizó la entrega (la cita ya había pasado), o no habló con el operador."
     },
     "entrega_realizada": {
       "type": "string",
@@ -51,7 +51,7 @@
     },
     "hora_estimada": {
       "type": "string",
-      "description": "La hora estimada de llegada en formato HH:MM de 24 horas (por ejemplo 07:00, 07:30 o 15:00), solo si el operador dijo una hora clara o la confirmó cuando Sofía se la repitió: 'a las siete de la mañana' es 07:00 y 'a las tres de la tarde' es 15:00. Vacío si no dio hora, si fue vaga ('temprano', 'en la tarde', 'en un rato'), si hay que calcularla ('en dos horas') o si no queda claro si es de la mañana o de la tarde. Nunca la inventes ni la calcules."
+      "description": "La hora estimada de llegada en formato HH:MM de 24 horas (por ejemplo 07:00, 07:30 o 15:00), solo si el operador dijo él mismo la hora y se sabe si es de la mañana, de la tarde o de la noche: porque él lo dijo ('a las siete de la mañana' es 07:00, 'a las tres de la tarde' es 15:00) o porque confirmó la parte del día cuando Sofía se la repitió ('a las seis' y después sí a '¿a las seis de la mañana?' es 06:00). Si dijo 'antes de las siete de la mañana', es 07:00. Vacío si no dio hora, si fue vaga ('creo que sí', 'a ver si llego', 'temprano', 'más tarde', 'depende del tráfico', 'no sé', 'ahorita', 'en un rato' y parecidas), si hay que calcularla ('en dos horas'), o si no se sabe la parte del día porque no la dijo ni la confirmó. Nunca la tomes de la hora de la cita ni del límite que dijo Sofía. Nunca la inventes ni la calcules."
     },
     "fecha_estimada": {
       "type": "string",

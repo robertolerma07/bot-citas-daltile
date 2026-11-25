@@ -95,6 +95,35 @@ def test_cierre_whatsapp():
     assert "{{tel_monitoreo_texto}}" in prompt
 
 
+RESPUESTAS_VAGAS = ["creo que sí", "a ver si llego", "temprano", "más tarde", "depende del tráfico", "no sé",
+                    "ahorita", "en un rato"]
+
+
+def test_respuestas_vagas_iguales_en_prompt_y_extraccion():
+    prompt = leer_prompt(SEGUIMIENTO)
+    extraccion = leer_config(SEGUIMIENTO)["extraccion_de_datos"]
+    for frase in RESPUESTAS_VAGAS:
+        assert f'"{frase}"' in prompt, frase
+        assert f"'{frase}'" in extraccion["llega_antes_de_la_cita"]["description"], frase
+        assert f"'{frase}'" in extraccion["hora_estimada"]["description"], frase
+
+
+def test_no_ofrece_el_limite_para_que_diga_que_si():
+    # Sofía solo confirma la hora que dijo el operador; nunca pregunta "¿llega antes de {limite}?"
+    prompt = leer_prompt(SEGUIMIENTO)
+    assert "¿Entonces llega {{fecha_cita_texto}}" not in prompt
+    assert "a más tardar a {{limite_texto}}" not in prompt
+    assert "Nunca le ofrezcas la hora de la cita ni el límite" in prompt
+
+
+def test_confirmacion_dice_la_parte_del_dia():
+    prompt = leer_prompt(SEGUIMIENTO)
+    assert 'no trae "de la mañana", "de la tarde" o "de la noche"' in prompt
+    descripcion = leer_config(SEGUIMIENTO)["extraccion_de_datos"]["hora_estimada"]["description"]
+    assert "Nunca la tomes de la hora de la cita ni del límite que dijo Sofía" in descripcion
+    assert "parte del día" in descripcion
+
+
 def test_aviso_sin_cambios():
     # tests/datos/cuerpo_aviso.json se generó con el subir_agente.py anterior a esta tarea (commit 1b16596)
     esperado = json.loads((RAIZ / "tests" / "datos" / "cuerpo_aviso.json").read_text(encoding="utf-8"))
