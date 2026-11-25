@@ -27,7 +27,12 @@ python -m venv .venv
 | `agente/elegir_voces.py` | Lista voces mexicanas que sirven para agentes y escribe `agente/voces_mexicanas.md` | No |
 | `agente/usar_cita_en_prueba.py --escenario N` | Carga en el agente la cita del escenario N para probar en navegador | No |
 | `pruebas/revisar_prueba.py --escenario N --ronda R` | Revisa la última prueba contra lo esperado y la anota en `pruebas/bitacora.csv` | No |
-| `agente/subir_agente.py` | Crea o actualiza el agente desde `prompt.md` y `config.json`, y comprueba cómo quedó (`--revisar` solo comprueba) | No (no hace llamadas) |
+| `agente/subir_agente.py` | Crea o actualiza el agente desde `prompt.md` y `config.json`, y comprueba cómo quedó (`--revisar` solo comprueba; `--agente seguimiento` es el del domingo) | No (no hace llamadas) |
+| `herramientas/registrar_numero.py` | Registra el número de Twilio en ElevenLabs y guarda `ELEVENLABS_PHONE_NUMBER_ID` en `.env` | No |
+| `herramientas/generar_viajes_ejemplo.py` | Regenera `datos/viajes_prueba.xlsx` y `datos/viajes_con_errores.xlsx` | No |
+| `python -m domingo.servir` | Página web del domingo (subir, aprobar, detener); en el servidor corre como servicio | No |
+| `python -m domingo.latido` | Latido cada 5 minutos: llama, reintenta y manda correos según la hora de CDMX | **Sí** (llama, pero solo con la lista aprobada y los candados) |
+| `despliegue/instalar.sh` | Instala o actualiza todo en el servidor Ubuntu (se corre con `sudo`) | No (solo la renta del servidor) |
 
 Ejemplos:
 ```
@@ -56,6 +61,16 @@ Todos los scripts que llamen:
 - piden escribir `SI` después de mostrar cuántas llamadas harán y a quién;
 - solo corren entre 9:00 y 20:00 hora de Ciudad de México, salvo con `--forzar`;
 - nunca imprimen una key completa, solo sus últimos 4 caracteres.
+
+## Seguimiento de domingo (`domingo/`)
+Cada domingo el equipo sube la lista de viajes en una página web, Roberto la aprueba antes de las 12:00 y el bot llama
+a los operadores a partir de las 13:00 (reintentos a las 19:00 y 19:30). Cada persona de monitoreo recibe por correo solo
+sus casos, Roberto recibe correos de control y el lunes a las 7:00 llega el resumen en Excel.
+- La página (`python -m domingo.servir`) exige `PAGINA_PASSWORD` y `PAGINA_SECRETO` en el `.env`.
+- El latido (`python -m domingo.latido`) lo corre `cron` cada 5 minutos en el servidor. Los dos deben correr con el mismo usuario de Linux.
+- `config/domingo.json` trae `"ensayo": true`: mientras sea así solo se llama a los celulares de `config/numeros_permitidos.txt`.
+- Montaje del servidor paso a paso: `docs/guia-servidor-domingo.md`. Archivos de despliegue en `despliegue/`.
+- Diseño: `docs/superpowers/specs/2026-11-24-seguimiento-domingo-design.md`.
 
 ## Bitácora
 Avance, decisiones y pendientes en `PROGRESO.md`.

@@ -1,0 +1,2 @@
+# Latido del bot de domingo: cada 5 minutos. El codigo usa hora de Ciudad de Mexico, la hora del servidor no importa.
+*/5 * * * * cd /home/sofia/bot-citas-daltile && .venv/bin/python -m domingo.latido >> resultados/domingo/cron.log 2>&1
