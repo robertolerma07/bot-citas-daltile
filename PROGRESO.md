@@ -238,3 +238,10 @@ Rama `domingo-mvp`, juntada con `master` el 2026-11-25 tras la revisión final (
 - **Ensayo real un domingo** (gasta créditos y saldo): 4 o 5 celulares del equipo simulan los casos del diseño 5.8 (a tiempo, tarde, vago, no contesta, contesta otra persona). Revisar: estados finales; un correo por persona de monitoreo solo con sus casos; correo de control a las 13:00 y a las 19:30; reintentos a las 19:00 y 19:30; resumen del lunes a las 7:00 con el Excel. Anotar aquí IDs de conversación, duraciones, costo real por llamada y ajustes.
 - Prueba en navegador de "Sofía - seguimiento" (se aplazó; solo se verificó por API).
 - ✅ 2026-11-25: `domingo-mvp` juntada con `master` después de la revisión final; se despliega `master`.
+
+### 2026-11-25 — Primera prueba en navegador de «Sofía - seguimiento»
+- Conversación `conv_7501m89rvz7kem89my24kfaeyy0h` (60 s, voz, 1,023 créditos). Respuesta "no sé, a lo mejor sí" → preguntó la hora una vez → "a las doce" → confirmó "el lunes treinta de noviembre a las doce de la tarde". Extracción correcta (`llega_antes_de_la_cita = no`, `hora_estimada = 12:00`, `fecha_estimada = 2026-11-30`); decisión del bot: **monitoreo**, correcta.
+- Fallas encontradas y corregidas en `agente_seguimiento/`:
+  - No preguntó "¿Qué pasó?" aunque la hora era después de la cita: el paso 6 ahora compara antes de confirmar y pregunta siempre el motivo si va retrasado.
+  - Se despidió y no colgó (la llamada llegó al tope de 60 s): el cierre ahora pide usar `end_call` en el mismo turno, y el colgado por silencio baja de 20 a 12 s.
+- Agente actualizado (todas las secciones ✅); 318 pruebas pasan. Falta repetir las pruebas a tiempo, tarde, vaga y "ya entregué".

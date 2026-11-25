@@ -138,3 +138,22 @@ def test_agentes_registrados():
     assert subir_agente.AGENTES["aviso"]["variable_env"] == "ELEVENLABS_AGENT_ID"
     assert subir_agente.AGENTES["seguimiento"]["carpeta"] == SEGUIMIENTO
     assert subir_agente.AGENTES["seguimiento"]["variable_env"] == "ELEVENLABS_AGENT_ID_SEGUIMIENTO"
+
+
+def test_pregunta_que_paso_antes_de_confirmar_si_va_retrasado():
+    # Prueba en navegador del 2026-11-25: "a las doce" para una cita a las ocho y Sofía no preguntó el motivo
+    prompt = leer_prompt(SEGUIMIENTO)
+    paso_6 = prompt.index("6. Antes de confirmar")
+    paso_7 = prompt.index("7. Confirma una sola vez")
+    assert paso_6 < paso_7
+    assert "pregunta siempre" in prompt[paso_6:paso_7]
+    assert "a las doce" in prompt[paso_6:paso_7]
+
+
+def test_cierre_y_end_call_van_juntos():
+    # Prueba en navegador del 2026-11-25: se despidió y la llamada siguió abierta hasta los 60 s
+    prompt = leer_prompt(SEGUIMIENTO)
+    cierre = prompt[prompt.index("## Cierre"):prompt.index("# Respuestas vagas")]
+    assert "`end_call`" in cierre
+    assert "mismo turno" in cierre
+    assert leer_config(SEGUIMIENTO)["turnos"]["silence_end_call_timeout"] <= 12

@@ -19,7 +19,7 @@
   "turnos": {
     "turn_timeout": 7,
     "turn_eagerness": "normal",
-    "silence_end_call_timeout": 20
+    "silence_end_call_timeout": 12
   },
   "dtmf": {
     "dtmf_input_timeout": 2,
