@@ -71,6 +71,18 @@ def test_variables_de_ejemplo_seguimiento():
     assert "telefono" not in ejemplo and "+525500000001" not in ejemplo.values()
 
 
+def test_variables_de_ejemplo_seguimiento_con_cita_pasada():
+    """--cita-ya-paso: la llamada se simula el lunes 30 a las 10:00, dos horas después de la cita."""
+    from domingo.reglas import cita_ya_paso
+    ejemplo = subir_agente.variables_de_ejemplo_seguimiento(cita_ya_paso=True)
+    assert ejemplo["cita_ya_paso"] == "sí"
+    assert ejemplo["hoy_texto"] == fecha_texto("2026-11-30") == ejemplo["fecha_cita_texto"]
+    assert ejemplo["saludo"] == "Buenos días"
+    # Coincide con lo que decidiría el latido en ese momento
+    viaje = {"fecha_cita": "2026-11-30", "tipo_cita": "Hora", "limite": "08:00"}
+    assert cita_ya_paso(viaje, datetime(2026, 11, 30, 10, 0, tzinfo=ZONA_CDMX))
+
+
 def test_extraccion_exacta():
     extraccion = leer_config(SEGUIMIENTO)["extraccion_de_datos"]
     assert set(extraccion) == set(EXTRACCION_ESPERADA) == set(CAMPOS_EXTRAIDOS)

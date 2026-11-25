@@ -18,20 +18,23 @@ Uso:
     .venv\Scripts\python agente\subir_agente.py --revisar             (solo comprobar, sin cambiar nada)
     .venv\Scripts\python agente\subir_agente.py --agente seguimiento  (agente de seguimiento de domingo)
     .venv\Scripts\python agente\subir_agente.py --agente seguimiento --revisar
+    .venv\Scripts\python agente\subir_agente.py --agente seguimiento --cita-ya-paso
+        (carga el ejemplo como si la cita ya hubiera pasado, para probar «¿Ya realizó la entrega?»;
+         para volver al ejemplo normal, córrelo otra vez sin --cita-ya-paso)
 """
 
 import argparse
 import json
 import re
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import requests
 from dotenv import set_key
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from domingo.calendario import cargar_calendario  # noqa: E402
+from domingo.calendario import cargar_calendario, hora_de  # noqa: E402
 from domingo.viajes import validar_viajes, variables_de_voz_viaje  # noqa: E402
 from lib.formato_voz import fecha_texto, saludo, variables_de_voz  # noqa: E402
 from lib.seguridad import RAIZ, RUTA_ENV, ZONA_CDMX, cargar_env, detener  # noqa: E402
@@ -100,11 +103,13 @@ def variables_de_ejemplo(folio=None):
     return ejemplo
 
 
-def variables_de_ejemplo_seguimiento():
+def variables_de_ejemplo_seguimiento(cita_ya_paso=False):
     """
     Valores de ejemplo (placeholders) del agente de seguimiento: los del primer viaje de
     datos/viajes_prueba.xlsx más los que se agregan al momento de llamar (saludo según la hora
     de CDMX, cita_ya_paso y hoy_texto). El teléfono del operador NO se le pasa al agente.
+    Con cita_ya_paso=True se simula que la llamada ocurre dos horas después de la cita (para
+    probar en el navegador el caso «¿Ya realizó la entrega?»): hoy es el día de la cita.
     """
     errores, _, viajes = validar_viajes(VIAJES_EJEMPLO, DOMINGO_EJEMPLO, AHORA_EJEMPLO, cargar_calendario(),
                                         LISTA_EJEMPLO)
@@ -113,9 +118,12 @@ def variables_de_ejemplo_seguimiento():
                 + "\n".join(errores))
     viaje = viajes[0]
     ahora = datetime.now(ZONA_CDMX)
+    if cita_ya_paso:
+        ahora = datetime.combine(date.fromisoformat(viaje["fecha_cita"]), hora_de(viaje["limite"]),
+                                 tzinfo=ZONA_CDMX) + timedelta(hours=2)
     ejemplo = variables_de_voz_viaje(viaje)
     ejemplo["saludo"] = saludo(ahora.strftime("%H:%M"))
-    ejemplo["cita_ya_paso"] = "no"
+    ejemplo["cita_ya_paso"] = "sí" if cita_ya_paso else "no"
     ejemplo["hoy_texto"] = fecha_texto(ahora.date().isoformat())
     ejemplo["viaje"] = viaje["viaje"]  # no lo usa el prompt; sirve para saber qué viaje está cargado
     return ejemplo
@@ -253,9 +261,13 @@ def main():
     parser.add_argument("--revisar", action="store_true", help="solo comprobar, sin cambiar nada")
     parser.add_argument("--folio", help="solo agente aviso: cita cuyos datos se cargan como ejemplo (por defecto, "
                                         "la que ya tiene cargada el agente, o la primera de citas_prueba.csv)")
+    parser.add_argument("--cita-ya-paso", action="store_true",
+                        help="solo agente seguimiento: carga el ejemplo como si la cita ya hubiera pasado")
     args = parser.parse_args()
     if args.folio and args.agente != "aviso":
         detener("--folio solo sirve para el agente aviso.")
+    if args.cita_ya_paso and args.agente != "seguimiento":
+        detener("--cita-ya-paso solo sirve para el agente seguimiento.")
 
     carpeta = AGENTES[args.agente]["carpeta"]
     variable_env = AGENTES[args.agente]["variable_env"]
@@ -271,7 +283,7 @@ def main():
         folio = args.folio or (folio_cargado(agent_id, api_key) if agent_id else None)
         ejemplo = variables_de_ejemplo(folio)
     else:
-        ejemplo = variables_de_ejemplo_seguimiento()
+        ejemplo = variables_de_ejemplo_seguimiento(args.cita_ya_paso)
     if args.revisar and agent_id:
         # El saludo (y la fecha de hoy) dependen del momento: al solo revisar se comparan contra lo ya guardado
         guardado = llamar_api("GET", f"/v1/convai/agents/{agent_id}", api_key)
@@ -285,7 +297,7 @@ def main():
               f"{ejemplo['tipo_contacto']})")
     else:
         print(f"Viaje de ejemplo cargado: viaje {ejemplo['viaje']} ({ejemplo['operador']}, "
-              f"cita de {ejemplo['tipo_cita']})")
+              f"cita de {ejemplo['tipo_cita']}; ¿la cita ya pasó? {ejemplo['cita_ya_paso']})")
     usadas = revisar_variables([prompt, config["primer_mensaje"]], ejemplo)
     print(f"Variables usadas por el prompt: {len(usadas)} (todas con valor de ejemplo)")
     cuerpo = armar_cuerpo(config, prompt, ejemplo)
