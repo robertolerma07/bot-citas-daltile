@@ -228,8 +228,10 @@ class _Latido:
         if self.inicio < _momento(self.domingo, self.cal["aprobar_hasta"]) or self.ya_hecho("sin_lista"):
             return
         ok = self.enviar(avisos.aviso_sin_lista(self.domingo.isoformat(), self.correo_control))
-        self.marcar_hecho("sin_lista")
-        self.anota("No hay lista aprobada: " + ("se avisó a control." if ok else "no salió el aviso a control."))
+        if ok:
+            self.marcar_hecho("sin_lista")  # si no salió, se intenta otra vez en el siguiente latido
+        self.anota("No hay lista aprobada: " + ("se avisó a control." if ok else
+                                                "no salió el aviso a control; se reintenta en el siguiente latido."))
 
     # ----------------------------------------------------------------- 3. llamadas en curso
 
@@ -318,6 +320,7 @@ class _Latido:
             if suspendida is not None:
                 almacen.guardar_estado_api(self.domingo, api, self.raiz)
                 self.anota("La prueba de la API falló; las llamadas siguen suspendidas.")
+                self.avisar_fallas_api(api)  # por si el aviso de esta caída no salió antes
                 return
             if api["fallas_seguidas"] >= MAX_FALLAS_API_SEGUIDAS:
                 api["suspendida_desde"] = momento
@@ -413,13 +416,19 @@ class _Latido:
         """Suspende las llamadas y avisa a control una sola vez por caída."""
         self.anota(f"{MAX_FALLAS_API_SEGUIDAS} fallas seguidas de la API de llamadas: se suspenden las llamadas "
                    f"{MINUTOS_SUSPENSION_API} minutos.")
+        self.avisar_fallas_api(api)
+
+    def avisar_fallas_api(self, api):
+        """Aviso de la caída a control, si no ha salido; solo se marca enviado si de verdad salió."""
         if api["aviso_enviado"]:
             return
         ok = self.enviar(avisos.aviso_fallas_api(self.domingo.isoformat(), api["ultimas_fallas"],
                                                  self.correo_control))
-        api["aviso_enviado"] = True
-        almacen.guardar_estado_api(self.domingo, api, self.raiz)
-        self.anota("Aviso de fallas de la API " + ("enviado a control." if ok else "NO se pudo enviar."))
+        if ok:
+            api["aviso_enviado"] = True
+            almacen.guardar_estado_api(self.domingo, api, self.raiz)
+        self.anota("Aviso de fallas de la API " + ("enviado a control." if ok else
+                                                   "NO se pudo enviar; se reintenta en la siguiente prueba."))
 
     # ----------------------------------------------------------------- 6. fin de la ventana y rondas
 

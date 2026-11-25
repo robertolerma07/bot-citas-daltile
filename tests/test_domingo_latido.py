@@ -207,6 +207,18 @@ def test_sin_lista_avisa_una_vez(tmp_path, cal):
     assert tel.llamadas == []
 
 
+
+def test_sin_lista_que_no_sale_se_reintenta(tmp_path, cal):
+    tel, correo = Telefonia({}), Correo(resultado=False)
+    _latido(dom(12, 5), tel, correo, tmp_path, cal)
+    assert len(correo.enviados) == 1 and not almacen.ya_hecho(DOMINGO, "sin_lista", raiz=tmp_path)
+    correo.resultado = True
+    _latido(dom(12, 10), tel, correo, tmp_path, cal)
+    assert len(correo.enviados) == 2 and almacen.ya_hecho(DOMINGO, "sin_lista", raiz=tmp_path)
+    _latido(dom(12, 15), tel, correo, tmp_path, cal)
+    assert len(correo.enviados) == 2
+
+
 # --------------------------------------------------------------------------- ronda y reintentos
 
 def test_ronda_1300_llama_a_todos_y_manda_correos(tmp_path, cal):
@@ -357,6 +369,21 @@ def test_tres_fallas_api_suspenden(tmp_path, cal):
         assert estados[v]["historial"] == [] and estados[v]["fallas_api"] == 1
     assert not almacen.ya_hecho(DOMINGO, "correo_1300", raiz=tmp_path)
     assert any("HTTP 500" in f["texto"] for f in almacen.fallas_del_dia(DOMINGO, raiz=tmp_path))
+
+
+
+def test_aviso_de_caida_que_no_sale_se_reintenta(tmp_path, cal):
+    _aprobar(tmp_path, [_viaje(n, "ana@m.com") for n in range(1, 6)])
+    api, correo = ApiCaida(Telefonia({})), Correo(resultado=False)
+    _latido_api(dom(13, 0), api, correo, tmp_path, cal)
+    assert len(correo.con_asunto("Fallas de la API")) == 1
+    assert almacen.leer_estado_api(DOMINGO, raiz=tmp_path)["aviso_enviado"] is False
+    correo.resultado = True
+    _latido_api(dom(13, 15), api, correo, tmp_path, cal)  # el sondeo falla: se vuelve a intentar el aviso
+    assert len(correo.con_asunto("Fallas de la API")) == 2
+    assert almacen.leer_estado_api(DOMINGO, raiz=tmp_path)["aviso_enviado"] is True
+    _latido_api(dom(13, 20), api, correo, tmp_path, cal)
+    assert len(correo.con_asunto("Fallas de la API")) == 2  # ya salió: uno por caída
 
 
 def test_suspension_sigue_en_el_siguiente_latido_y_luego_un_sondeo(tmp_path, cal):
