@@ -225,6 +225,13 @@ def aviso_fallas_api(domingo, fallas, correo_control):
                  "\n".join(lineas) + "\n")
 
 
+def aviso_error_inesperado(domingo, tipo, correo_control):
+    """Aviso a control de que el latido truena con un error inesperado (solo el tipo, sin su texto)."""
+    return Aviso(_copia(correo_control), [], _asunto(domingo, "Error inesperado en el latido"),
+                 f"El latido del domingo {domingo} se detuvo por un error inesperado ({tipo}). Mientras siga, "
+                 "puede que no se hagan llamadas ni se manden correos. Revisa latido.log en el servidor." + chr(10))
+
+
 def avisos_de_resumen(domingo, viajes, estados, correo_control, ruta_excel):
     """Resumen del lunes: uno por persona de monitoreo con sus viajes y uno a control con todos y el Excel."""
     lista = []

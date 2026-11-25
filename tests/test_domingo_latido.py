@@ -616,6 +616,64 @@ def test_en_curso_que_nunca_termina_cuenta_sin_respuesta(tmp_path, cal):
     assert tel.llamadas == []
 
 
+
+def _v1_en_curso_y_v2_pendiente(raiz):
+    _aprobar(raiz, VIAJES_RONDA[:2])
+    estados = almacen.estados_de(DOMINGO, VIAJES_RONDA[:2], raiz)
+    estados["V1"].update(estado="en_curso", en_curso={"conversacion_id": "conv_rara", "inicio": dom(13, 0)})
+    almacen.guardar_estados(DOMINGO, estados, raiz=raiz)
+
+
+@pytest.mark.parametrize("respuesta", [
+    AttributeError("'list' object has no attribute 'get' +525500000001"),  # p. ej. JSON que no es objeto
+    ["no", "es", "un", "diccionario"],
+])
+def test_error_inesperado_al_leer_el_resultado_no_detiene_el_latido(tmp_path, cal, respuesta):
+    _v1_en_curso_y_v2_pendiente(tmp_path)
+    tel, correo = Telefonia({"V2": A_TIEMPO}), Correo()
+
+    def esperar(conversacion, env, dormir=None):
+        if conversacion == "conv_rara":
+            if isinstance(respuesta, Exception):
+                raise respuesta
+            return respuesta
+        return tel.esperar_resultado(conversacion, env, dormir=dormir)
+
+    def latido_en(ahora):
+        return ejecutar_latido(ahora, cal, ENV, tmp_path, tel.llamar, esperar, correo.enviar)
+
+    latido_en(dom(13, 5))
+    estados = _estados(tmp_path)
+    assert estados["V1"]["estado"] == "en_curso"  # se revisa en el siguiente latido, como con ErrorTelefonia
+    assert tel.llamados() == ["V2"] and estados["V2"]["estado"] == "a_tiempo"  # los demás siguen
+    textos = [f["texto"] for f in almacen.fallas_del_dia(DOMINGO, raiz=tmp_path)]
+    tipo = type(respuesta).__name__ if isinstance(respuesta, Exception) else "TypeError"
+    assert any("V1" in t and tipo in t for t in textos)
+    assert not any("0001" in t or "attribute" in t for t in textos)  # solo el tipo del error
+    latido_en(dom(14, 0))  # 60 minutos sin poder leerla: cuenta como sin respuesta
+    v1 = _estados(tmp_path)["V1"]
+    assert v1["estado"] == "sin_respuesta" and v1["intentos"] == 1 and v1["en_curso"] is None
+
+
+
+def test_error_inesperado_al_decidir_no_detiene_a_los_demas(tmp_path, cal, monkeypatch):
+    _v1_en_curso_y_v2_pendiente(tmp_path)
+    tel, correo = Telefonia({"conv_rara": A_TIEMPO, "V2": A_TIEMPO}), Correo()
+    original = latido.decidir
+
+    def decidir(viaje, resultado, momento):
+        if viaje["viaje"] == "V1":
+            raise KeyError("limite +525500000001")
+        return original(viaje, resultado, momento)
+
+    monkeypatch.setattr(latido, "decidir", decidir)
+    _latido(dom(13, 5), tel, correo, tmp_path, cal)
+    estados = _estados(tmp_path)
+    assert estados["V1"]["estado"] == "en_curso" and estados["V2"]["estado"] == "a_tiempo"
+    textos = [f["texto"] for f in almacen.fallas_del_dia(DOMINGO, raiz=tmp_path)]
+    assert any("V1" in t and "KeyError" in t for t in textos) and not any("0001" in t for t in textos)
+
+
 # --------------------------------------------------------------------------- avisos
 
 def test_aviso_que_falla_queda_pendiente(tmp_path, cal):
@@ -769,3 +827,63 @@ def test_main_error_inesperado_sale_con_1(tmp_path, main_aislado, monkeypatch, c
     texto = (tmp_path / "latido.log").read_text(encoding="utf-8")
     assert "RuntimeError" in texto and "se cayó el disco" in texto
     assert "Traceback" not in capsys.readouterr().err
+
+
+
+def _main_que_revienta(monkeypatch, tmp_path, ahora, correo):
+    def revienta(*a, **k):
+        raise RuntimeError("se cayó el disco +525500000001")
+
+    monkeypatch.setattr(latido, "ejecutar_latido", revienta)
+    monkeypatch.setattr(latido, "_ahora", lambda: ahora)
+    monkeypatch.setattr(latido, "cargar_env", lambda nombres: ({**ENV, "SMTP_PASSWORD": "x"}, []))
+    monkeypatch.setattr(avisos, "enviar", correo.enviar)
+
+
+def test_main_error_inesperado_se_anota_y_avisa_una_vez_al_dia(tmp_path, main_aislado, monkeypatch):
+    correo = Correo()
+    _main_que_revienta(monkeypatch, tmp_path, dom(14, 0), correo)
+    assert latido.main() == 1
+    textos = [f["texto"] for f in almacen.fallas_del_dia(DOMINGO, raiz=tmp_path)]
+    assert len(textos) == 1 and "RuntimeError" in textos[0]
+    assert "disco" not in textos[0] and "0001" not in textos[0]  # en la página, solo el tipo
+    assert len(correo.enviados) == 1 and correo.enviados[0].para == [CONTROL]
+    assert "RuntimeError" in correo.enviados[0].cuerpo and "disco" not in correo.enviados[0].cuerpo
+    assert latido.main() == 1
+    assert len(correo.enviados) == 1  # uno por día
+    assert len(almacen.fallas_del_dia(DOMINGO, raiz=tmp_path)) == 1
+    # El lunes en la mañana (resumen) es otro día: otro aviso
+    monkeypatch.setattr(latido, "_ahora", lambda: lun(7, 0))
+    assert latido.main() == 1
+    assert len(correo.enviados) == 2
+
+
+def test_main_error_inesperado_reintenta_el_aviso_que_no_salio(tmp_path, main_aislado, monkeypatch):
+    correo = Correo(resultado=False)
+    _main_que_revienta(monkeypatch, tmp_path, dom(14, 0), correo)
+    assert latido.main() == 1
+    correo.resultado = True
+    assert latido.main() == 1
+    assert latido.main() == 1
+    assert len(correo.enviados) == 2  # el que falló y el que salió
+
+
+def test_main_error_inesperado_fuera_de_domingo_no_avisa(tmp_path, main_aislado, monkeypatch):
+    correo = Correo()
+    _main_que_revienta(monkeypatch, tmp_path, datetime(2026, 12, 2, 14, 0, tzinfo=ZONA_CDMX), correo)
+    assert latido.main() == 1
+    assert correo.enviados == [] and not (tmp_path / DOMINGO.isoformat()).exists()
+
+
+def test_main_error_al_avisar_no_truena(tmp_path, main_aislado, monkeypatch):
+    correo = Correo()
+    _main_que_revienta(monkeypatch, tmp_path, dom(14, 0), correo)
+
+    def no_escribe(*a, **k):
+        raise OSError("disco lleno")
+
+    monkeypatch.setattr(almacen, "anotar_falla", no_escribe)
+    monkeypatch.setattr(almacen, "ya_hecho", no_escribe)
+    assert latido.main() == 1
+    texto = (tmp_path / "latido.log").read_text(encoding="utf-8")
+    assert "RuntimeError" in texto and "OSError" in texto

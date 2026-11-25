@@ -22,7 +22,9 @@ reinicia a media llamada, el siguiente latido la resuelve por su conversación. 
      domingo, sin esperar a la siguiente ronda.
   7. Lunes después de las 7:00: resumen con el Excel, una sola vez.
 
-Nunca imprime keys ni contraseñas, y la bitácora no trae teléfonos completos.
+Un error inesperado al leer una llamada en curso se trata como una falla de telefonía de ese viaje
+(no traba a los demás); uno que tumba el latido se anota en la página y se avisa a control una vez
+al día. Nunca imprime keys ni contraseñas, y la bitácora no trae teléfonos completos.
 """
 
 import copy
@@ -240,8 +242,15 @@ class _Latido:
 
     def resolver_en_curso(self):
         for viaje in self.viajes:
-            if self.estados[viaje["viaje"]].get("en_curso"):
+            if not self.estados[viaje["viaje"]].get("en_curso"):
+                continue
+            try:
                 self.resolver(viaje)
+            except (almacen.CandadoOcupado, almacen.CandadoPerdido):
+                raise
+            except Exception as e:  # noqa: BLE001 - un viaje con un error no debe trabar a los demás
+                self.falla(f"Viaje {viaje['viaje']}: error inesperado al resolver la llamada en curso "
+                           f"({type(e).__name__}); se revisa en el siguiente latido")
 
     def resolver(self, viaje):
         """Lee el resultado de la llamada en curso del viaje, decide y guarda el estado nuevo."""
@@ -255,13 +264,25 @@ class _Latido:
                 raise ErrorTelefonia("la llamada en curso no tiene conversación")
             self.refrescar()
             resultado = self._esperar(conversacion, self.env, dormir=self.dormir_y_refrescar)
-        except ErrorTelefonia as e:
+            if not isinstance(resultado, dict):
+                raise TypeError("el resultado de la llamada no es un diccionario")
+        except (almacen.CandadoOcupado, almacen.CandadoPerdido):
+            raise
+        except Exception as e:  # noqa: BLE001 - un error inesperado no debe trabar el latido en cada vuelta
+            # Un error inesperado se trata como uno de telefonía, pero solo se anota su tipo: su texto
+            # podría traer un teléfono o datos de la cuenta.
+            inesperado = not isinstance(e, ErrorTelefonia)
+            motivo = f"error inesperado {type(e).__name__}" if inesperado else str(e)
             if self.ahora() - inicio < timedelta(minutes=MINUTOS_MAXIMOS_EN_CURSO):
-                self.anota(f"Viaje {id_viaje}: todavía no hay resultado de la llamada ({e}); "
-                           "se revisa en el siguiente latido.")
+                texto = (f"Viaje {id_viaje}: todavía no hay resultado de la llamada ({motivo}); "
+                         "se revisa en el siguiente latido")
+                if inesperado:
+                    self.falla(texto)  # se ve en la página y en el correo de control
+                else:
+                    self.anota(texto + ".")
                 return
             self.falla(f"Viaje {id_viaje}: no se pudo leer el resultado de la llamada en "
-                       f"{MINUTOS_MAXIMOS_EN_CURSO} minutos ({e}); cuenta como sin respuesta")
+                       f"{MINUTOS_MAXIMOS_EN_CURSO} minutos ({motivo}); cuenta como sin respuesta")
             resultado = {}
 
         resultado = normalizar_fecha_estimada(viaje, resultado)
@@ -568,17 +589,57 @@ def _escribir_bitacora(lineas):
         print(f"No se pudo escribir la bitácora {ruta.name} ({type(e).__name__})", file=sys.stderr)
 
 
+def _ahora():
+    return datetime.now(ZONA_CDMX)
+
+
+def _avisar_error_inesperado(error, env):
+    """
+    Un error inesperado del latido se anota en las fallas del domingo en curso (para que se vea en la
+    página) y se avisa a control una vez al día (solo se marca si el correo salió). Solo va el tipo
+    del error: su texto podría traer datos. Nunca lanza; regresa las líneas para la bitácora.
+    """
+    tipo = type(error).__name__
+    try:
+        ahora = _ahora()
+        domingo = domingo_de(ahora)
+    except Exception as e:  # noqa: BLE001
+        return [f"No se pudo saber el domingo para anotar el error inesperado ({type(e).__name__})"]
+    if domingo is None:
+        return []
+    lineas = []
+    try:
+        almacen.anotar_falla(domingo, f"Error inesperado en el latido ({tipo}); revisa latido.log en el servidor",
+                             ahora, RAIZ_DATOS)
+    except Exception as e:  # noqa: BLE001
+        lineas.append(f"No se pudo anotar el error inesperado en la página ({type(e).__name__})")
+    try:
+        clave = f"error_inesperado_{ahora.date().isoformat()}"
+        if almacen.ya_hecho(domingo, clave, RAIZ_DATOS):
+            return lineas
+        aviso = avisos.aviso_error_inesperado(domingo.isoformat(), tipo, (env.get("CORREO_CONTROL") or "").strip())
+        if avisos.enviar(aviso, env):
+            almacen.marcar_hecho(domingo, clave, ahora, RAIZ_DATOS)
+            lineas.append("Se avisó a control del error inesperado.")
+        else:
+            lineas.append("No salió el aviso a control del error inesperado; se reintenta en el siguiente latido.")
+    except Exception as e:  # noqa: BLE001
+        lineas.append(f"No se pudo avisar a control del error inesperado ({type(e).__name__})")
+    return lineas
+
+
 def main():
     """Un latido con las funciones reales. Regresa 0 (también con el candado ocupado) o 1 si algo truena."""
+    env = {}
     try:
         cal = cargar_calendario()
         env, _ = cargar_env(VARIABLES_ENV)  # lo que falte se anota en la bitácora del latido
-        bitacora = ejecutar_latido(datetime.now(ZONA_CDMX), cal, env, RAIZ_DATOS, telefonia.llamar,
-                                   telefonia.esperar_resultado, avisos.enviar,
-                                   reloj=lambda: datetime.now(ZONA_CDMX))
+        bitacora = ejecutar_latido(_ahora(), cal, env, RAIZ_DATOS, telefonia.llamar,
+                                   telefonia.esperar_resultado, avisos.enviar, reloj=_ahora)
     except Exception as e:  # noqa: BLE001 - el programador de tareas no debe recibir trazas en cada latido
         mensaje = str(e).replace("\n", " ")[:200]
-        _escribir_bitacora([f"Error inesperado ({type(e).__name__}): {mensaje}"])
+        _escribir_bitacora([f"Error inesperado ({type(e).__name__}): {mensaje}"]
+                           + _avisar_error_inesperado(e, env))
         return 1
     _escribir_bitacora(bitacora)
     return 0
