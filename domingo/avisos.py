@@ -6,6 +6,7 @@ agregar WhatsApp o SMS después sin tocar las reglas. Nunca imprime ni escribe c
 """
 
 import smtplib
+import ssl
 from dataclasses import dataclass
 from email.message import EmailMessage
 from pathlib import Path
@@ -35,7 +36,8 @@ class Aviso:
 
 def enviar(aviso, env, canal="correo", smtp=smtplib.SMTP):
     """
-    Envía un aviso. Hoy solo existe el canal "correo" (STARTTLS). Regresa False, sin traza, si falta
+    Envía un aviso. Hoy solo existe el canal "correo" (STARTTLS con el certificado del servidor
+    verificado, porque después viaja la contraseña). Regresa False, sin traza, si falta
     configuración o el envío falla; otro canal lanza NotImplementedError.
     """
     if canal != "correo":
@@ -70,7 +72,7 @@ def enviar(aviso, env, canal="correo", smtp=smtplib.SMTP):
                 ruta.read_bytes(), maintype="application",
                 subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename=ruta.name)
         with smtp(host, puerto, timeout=TIMEOUT_SMTP) as servidor:
-            servidor.starttls()
+            servidor.starttls(context=ssl.create_default_context())
             servidor.login(usuario, clave)
             servidor.send_message(mensaje)
     except (smtplib.SMTPException, OSError, ValueError, TypeError) as e:
@@ -96,12 +98,18 @@ def _cita_texto(viaje):
     return f"{viaje.get('fecha_cita', '')} {prefijo} {hora or viaje.get('limite', '')}"
 
 
+def _llamadas_hechas(estado):
+    """Llamadas que sí se hicieron. El historial también trae notas que no son llamadas (el paso a
+    monitoreo de las 21:00 o por fallas al marcar), así que se cuentan los intentos."""
+    return estado.get("intentos", 0)
+
+
 def _que_dijo(estado):
     historial = estado.get("historial") or []
     dijo = historial[-1].get("hora_estimada_dicha") if historial else None
     motivo = historial[-1].get("motivo") if historial else None
     if not dijo and not motivo and not any(h.get("hablo_con_operador") for h in historial):
-        return f"No contestó en {len(historial) or estado.get('intentos', 0)} llamadas"
+        return f"No contestó en {_llamadas_hechas(estado)} llamadas"
     partes = [f"hora: {dijo}" if dijo else "hora: no la dio"]
     if motivo:
         partes.append(f"motivo: {motivo}")
@@ -120,7 +128,7 @@ def _bloque_caso(viaje, estado):
         f"  Cliente: {viaje.get('cliente', '')}",
         f"  Cita: {_cita_texto(viaje)}",
         f"  Qué dijo: {_que_dijo(estado)}",
-        f"  Llamadas hechas: {estado.get('intentos', 0)}",
+        f"  Llamadas hechas: {_llamadas_hechas(estado)}",
         f"  Conversación: {_conversacion(estado)}",
     ])
 
@@ -166,7 +174,7 @@ def _conteos(viajes, estados):
     conteos = {"llamadas": 0, "a tiempo": 0, "entregado": 0, "monitoreo": 0, "pendientes": 0}
     for v in viajes:
         e = _estado_de(estados, v)
-        conteos["llamadas"] += len(e.get("historial") or [])
+        conteos["llamadas"] += _llamadas_hechas(e)
         if e.get("estado") == "a_tiempo":
             conteos["a tiempo"] += 1
         elif e.get("estado") == "entregado":
@@ -249,7 +257,7 @@ def _cuerpo_resumen(domingo, viajes, estados):
     for v in viajes:
         e = _estado_de(estados, v)
         lineas.append(f"{v['viaje']} - {v.get('operador', '')} ({v.get('telefono', '')}) - {_cita_texto(v)} - "
-                      f"{ETIQUETAS.get(e.get('estado'), e.get('estado'))} - {e.get('intentos', 0)} llamada(s)")
+                      f"{ETIQUETAS.get(e.get('estado'), e.get('estado'))} - {_llamadas_hechas(e)} llamada(s)")
         if e.get("estado") == "monitoreo":
             lineas.append(f"    Qué dijo: {_que_dijo(e)}")
     return "\n".join(lineas) + "\n"
@@ -272,7 +280,7 @@ def escribir_excel_resumen(viajes, estados, ruta):
         e = _estado_de(estados, v)
         hoja.append([v["viaje"], v.get("linea"), v.get("operador"), v.get("telefono"), v.get("cliente"),
                      v.get("destino"), _cita_texto(v), v.get("correo_monitoreo"),
-                     ETIQUETAS.get(e.get("estado"), e.get("estado")), len(e.get("historial") or []),
+                     ETIQUETAS.get(e.get("estado"), e.get("estado")), _llamadas_hechas(e),
                      _que_dijo(e) if e.get("historial") or e.get("intentos") else "", _conversacion(e)])
         for h in e.get("historial") or []:
             historial.append([v["viaje"], h.get("fecha"), h.get("decision"), _celda(h.get("hablo_con_operador")),

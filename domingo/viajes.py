@@ -50,7 +50,11 @@ def leer_excel(ruta):
     """
     libro = load_workbook(Path(ruta), read_only=True, data_only=True)
     try:
-        renglones = libro.worksheets[0].iter_rows(values_only=True)
+        hoja = libro.worksheets[0]
+        # En modo de solo lectura openpyxl confía en la dimensión guardada en el archivo; si quedó
+        # vieja (más chica que los datos) se detendría antes y perdería viajes sin aviso.
+        hoja.reset_dimensions()
+        renglones = hoja.iter_rows(values_only=True)
         columnas = [_texto_de_celda(c) for c in next(renglones, ())]
         while columnas and not columnas[-1]:
             columnas.pop()  # celdas vacías al final del encabezado

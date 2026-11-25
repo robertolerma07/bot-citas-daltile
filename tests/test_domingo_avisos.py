@@ -1,6 +1,7 @@
 """Pruebas de los avisos por correo y del Excel del resumen del domingo (SMTP falso, sin red)."""
 
 import smtplib
+import ssl
 from datetime import datetime
 
 import openpyxl
@@ -52,6 +53,7 @@ def _escenario():
 class SmtpFalso:
     enviados = []
     conexiones = []
+    contextos = []
     falla = None
 
     def __init__(self, host, puerto, timeout=None):
@@ -66,8 +68,9 @@ class SmtpFalso:
     def __exit__(self, *a):
         return False
 
-    def starttls(self, *a, **k):
+    def starttls(self, *a, context=None, **k):
         self.pasos.append("starttls")
+        SmtpFalso.contextos.append(context)
 
     def login(self, usuario, clave):
         self.pasos.append(("login", usuario, clave))
@@ -79,7 +82,7 @@ class SmtpFalso:
 
 @pytest.fixture(autouse=True)
 def _limpia():
-    SmtpFalso.enviados, SmtpFalso.conexiones, SmtpFalso.falla = [], [], None
+    SmtpFalso.enviados, SmtpFalso.conexiones, SmtpFalso.contextos, SmtpFalso.falla = [], [], [], None
 
 
 def test_avisos_de_casos_por_persona():
@@ -222,3 +225,38 @@ def test_enviar_destinatario_invalido_regresa_false(capsys):
     a = Aviso(["ana@m.com\r\nBcc: x@y.com"], [], "x", "y")
     assert avisos.enviar(a, ENV, smtp=SmtpFalso) is False
     assert SmtpFalso.enviados == [] and CLAVE not in capsys.readouterr().out
+
+
+def test_enviar_starttls_verifica_el_certificado():
+    # La contraseña de Gmail viaja después del STARTTLS: el certificado del servidor se verifica
+    assert avisos.enviar(Aviso(["a@m.com"], [], "x", "y"), ENV, smtp=SmtpFalso) is True
+    contexto = SmtpFalso.contextos[0]
+    assert isinstance(contexto, ssl.SSLContext)
+    assert contexto.verify_mode == ssl.CERT_REQUIRED and contexto.check_hostname is True
+
+
+def _nota(motivo):
+    """Nota del historial que no es una llamada (paso a monitoreo de las 21:00 o por fallas al marcar)."""
+    return {"fecha": "2026-11-29T21:00:00-06:00", "decision": "monitoreo", "conversacion_id": None,
+            "hablo_con_operador": None, "llega_antes_de_la_cita": None, "entrega_realizada": None,
+            "hora_estimada_dicha": None, "hora_estimada": None, "fecha_estimada": None, "motivo": motivo}
+
+
+def test_las_notas_del_historial_no_cuentan_como_llamadas(tmp_path):
+    viajes = [_viaje(1, "ana@m.com"), _viaje(2, "ana@m.com")]
+    estados = {
+        # Dos llamadas sin respuesta y luego, a las 21:00, la nota de que pasa a monitoreo
+        "V1": _estado("monitoreo", 2, [_entrada("sin_respuesta", None, None)] * 2
+                      + [_nota("No se pudo completar la llamada")], True),
+        # Nunca se pudo marcar: ninguna llamada, solo la nota
+        "V2": _estado("monitoreo", 0, [_nota("No se pudo marcar a este número (falla técnica)")], True),
+    }
+    control = avisos.aviso_de_control(DOMINGO, "19:30", viajes, estados, CONTROL, [])
+    assert "llamadas: 2" in control.cuerpo
+    resumen = avisos.avisos_de_resumen(DOMINGO, viajes, estados, CONTROL, tmp_path / "r.xlsx")
+    assert all("llamadas: 2" in a.cuerpo for a in resumen)
+    hoja = openpyxl.load_workbook(tmp_path / "r.xlsx")["Viajes"]
+    columna = [c.value for c in hoja[1]].index("Llamadas")
+    assert [fila[columna] for fila in hoja.iter_rows(min_row=2, values_only=True)] == [2, 0]
+    casos = avisos.avisos_de_casos(viajes, estados, CONTROL)[0].cuerpo
+    assert "Llamadas hechas: 2" in casos and "Llamadas hechas: 0" in casos

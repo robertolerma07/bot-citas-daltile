@@ -183,3 +183,24 @@ def test_variables_de_voz_viaje(cal, tmp_path):
     assert v["limite_texto"] == "las ocho de la mañana"
     assert v["operador"] == "Miguel Ángel Torres"
     assert v["tel_monitoreo_texto"] and v["tel_monitoreo_digitos"]
+
+
+def test_leer_excel_con_dimension_guardada_vieja(tmp_path):
+    # Un Excel que guarda una dimensión más chica que sus datos (A1:K2): openpyxl en modo de solo
+    # lectura se detendría en el renglón 2 y los demás viajes se perderían sin aviso.
+    import re
+    import zipfile
+
+    filas = [fila_valida(viaje=str(100001 + i), telefono=f"+52550000000{i + 1}") for i in range(3)]
+    original = escribir_excel(tmp_path / "original.xlsx", filas)
+    ruta = tmp_path / "dimension_vieja.xlsx"
+    with zipfile.ZipFile(original) as zin, zipfile.ZipFile(ruta, "w", zipfile.ZIP_DEFLATED) as zout:
+        for item in zin.infolist():
+            datos = zin.read(item.filename)
+            if item.filename == "xl/worksheets/sheet1.xml":
+                datos, n = re.subn(rb'<dimension ref="[^"]*"', b'<dimension ref="A1:K2"', datos)
+                assert n == 1
+            zout.writestr(item, datos)
+    columnas, leidas = leer_excel(ruta)
+    assert [f["viaje"] for f in leidas] == ["100001", "100002", "100003"]
+    assert [f["_fila"] for f in leidas] == [2, 3, 4]
