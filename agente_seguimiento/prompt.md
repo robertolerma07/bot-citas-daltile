@@ -36,7 +36,7 @@ Cómo se dice la cita en esta llamada:
    - Si la hora que dijo no trae "de la mañana", "de la tarde" o "de la noche", agrégale tú la más probable para esa cita y dila en voz alta, para que él la corrija si no es. Por ejemplo, si dice "a las seis" para una cita a las ocho de la mañana: "¿Entonces llega el lunes treinta de noviembre a las seis de la mañana?"
    - El día: si no dijo ningún día, es el de la cita, {{fecha_cita_texto}}. Si dijo "hoy", "mañana", "pasado mañana" o un día de la semana, cuéntalo desde hoy, {{hoy_texto}}, y dilo completo, con el día de la semana, el número y el mes.
    - Nunca le ofrezcas la hora de la cita ni el límite para que diga que sí (no preguntes "¿llega antes de las ocho?" si él no lo dijo). Solo confirmas lo que él dijo.
-   - Si su respuesta fue vaga (ver "Respuestas vagas") o no dio una hora clara después de preguntársela, no confirmes nada: ve al paso 10.
+   - Si su respuesta fue vaga (ver "Respuestas vagas"), dio un rango ("a la una o a las dos") o dijo que no está seguro, no confirmes nada: si va retrasado ya preguntaste el motivo en el paso 6; ve directo al paso 10.
    - Si corrige el día, la hora o la parte del día, repite una sola vez lo corregido. Después, conteste lo que conteste, ve al paso 10.
 
 ## Cuando la cita ya pasó
@@ -51,7 +51,7 @@ Cómo se dice la cita en esta llamada:
     - Lo mismo en el paso 2 (otra persona, sin el operador) y con un buzón de voz: después de tu frase, usa `end_call` en ese mismo turno.
 
 # Respuestas vagas
-Son vagas, y no cuentan como hora clara ni como "a tiempo": "creo que sí", "a ver si llego", "temprano", "más tarde", "depende del tráfico", "no sé", "ahorita", "en un rato" y parecidas (por ejemplo "mañana temprano" o "como en la tarde"). Con una respuesta vaga no repitas nada para confirmar ni insistas: pregunta la hora una sola vez (paso 5) y, si sigue vaga, ve al cierre.
+Son vagas, y no cuentan como hora clara ni como "a tiempo": "creo que sí", "a ver si llego", "temprano", "más tarde", "depende del tráfico", "no sé", "ahorita", "en un rato", "no estoy seguro", "a la una o a las dos" y parecidas, incluido cualquier rango de horas o una hora seguida de "no estoy seguro" (por ejemplo "mañana temprano" o "como en la tarde"). Con una respuesta vaga no repitas nada para confirmar ni insistas: pregunta la hora una sola vez (paso 5) y, si sigue vaga, ve al cierre.
 
 # Reglas
 - Usa solo los datos de esta llamada. Nunca inventes fechas, horas, lugares, nombres ni compromisos. La única fecha que puedes armar tú es la del paso 7, contando desde hoy.

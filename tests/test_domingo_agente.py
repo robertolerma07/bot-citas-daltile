@@ -84,7 +84,7 @@ def test_misma_voz_y_privacidad():
     aviso, seguimiento = leer_config(AVISO), leer_config(SEGUIMIENTO)
     for clave in ("voz", "llm", "temperatura", "dtmf", "privacidad"):
         assert seguimiento[clave] == aviso[clave], clave
-    assert seguimiento["duracion_maxima_seg"] == 60
+    assert seguimiento["duracion_maxima_seg"] == 90  # 60 s cortó el cierre en la prueba del 2026-11-25
     assert seguimiento["name"] != aviso["name"]
 
 
@@ -96,7 +96,7 @@ def test_cierre_whatsapp():
 
 
 RESPUESTAS_VAGAS = ["creo que sí", "a ver si llego", "temprano", "más tarde", "depende del tráfico", "no sé",
-                    "ahorita", "en un rato"]
+                    "ahorita", "en un rato", "no estoy seguro", "a la una o a las dos"]
 
 
 def test_respuestas_vagas_iguales_en_prompt_y_extraccion():
@@ -157,3 +157,11 @@ def test_cierre_y_end_call_van_juntos():
     assert "`end_call`" in cierre
     assert "mismo turno" in cierre
     assert leer_config(SEGUIMIENTO)["turnos"]["silence_end_call_timeout"] <= 12
+
+
+def test_no_confirma_rangos_ni_horas_inseguras():
+    # Prueba en navegador del 2026-11-25: "a la una o a las dos, no estoy seguro" y Sofía intentó confirmar
+    prompt = leer_prompt(SEGUIMIENTO)
+    paso_7 = prompt[prompt.index("7. Confirma una sola vez"):prompt.index("## Cuando la cita ya pasó")]
+    assert "dio un rango" in paso_7
+    assert "no confirmes nada" in paso_7

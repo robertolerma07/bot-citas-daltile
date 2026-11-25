@@ -245,3 +245,9 @@ Rama `domingo-mvp`, juntada con `master` el 2026-11-25 tras la revisión final (
   - No preguntó "¿Qué pasó?" aunque la hora era después de la cita: el paso 6 ahora compara antes de confirmar y pregunta siempre el motivo si va retrasado.
   - Se despidió y no colgó (la llamada llegó al tope de 60 s): el cierre ahora pide usar `end_call` en el mismo turno, y el colgado por silencio baja de 20 a 12 s.
 - Agente actualizado (todas las secciones ✅); 318 pruebas pasan. Falta repetir las pruebas a tiempo, tarde, vaga y "ya entregué".
+
+### 2026-11-25 — Segunda prueba en navegador y tope de 90 s (decisión de Roberto)
+- Conversación `conv_8101m89v38k1fkgv44q5mbntfrzg` (60 s, 1,089 créditos): "no sé, depende del tráfico" → "a la una o a las dos, no estoy seguro" → Sofía **sí preguntó "¿Qué pasó?"** (motivo "el tráfico"); `hora_estimada` vacía, sin inventar; decisión: **monitoreo**, correcta.
+- Falla: intentó confirmar una hora insegura y la llamada llegó al tope de 60 s antes del cierre, así que el operador no oyó el WhatsApp de Monitoreo (tampoco se pudo comprobar que cuelgue sola).
+- Ajustes: un rango de horas o "no estoy seguro" cuentan como respuesta vaga (no se confirman; se va directo al cierre), en el prompt y en la extracción. **Decisión de Roberto:** la duración máxima sube de 60 a 90 s como red de seguridad; la meta sigue siendo ~30 s. Costo: solo las llamadas de más de 60 s cobran un minuto más en Twilio (~USD 0.05) y unos 450 créditos más.
+- Créditos de ElevenLabs: 5,996 de 10,000 usados. Antes del domingo de ensayo hay que subir a Starter.
