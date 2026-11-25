@@ -12,6 +12,7 @@ import json
 import os
 import tempfile
 import time
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -19,12 +20,18 @@ from domingo.reglas import estado_inicial
 from lib.seguridad import RAIZ
 
 RAIZ_DOMINGO = RAIZ / "resultados" / "domingo"
-EDAD_MAXIMA_CANDADO = 2 * 3600  # segundos: un candado más viejo se considera abandonado
+EDAD_MAXIMA_CANDADO = 20 * 60  # segundos sin refrescar: un candado más viejo se considera abandonado
 _ETIQUETA_FECHA = "__datetime__"
+REINTENTOS_REEMPLAZO = 10
+PAUSA_REEMPLAZO_SEG = 0.05
 
 
 class CandadoOcupado(Exception):
     """Otro proceso tiene el candado del latido."""
+
+
+class CandadoPerdido(Exception):
+    """Otro proceso se quedó con el candado mientras este lo tenía (lo creyó abandonado)."""
 
 
 def carpeta(domingo, raiz=RAIZ_DOMINGO):
@@ -47,6 +54,21 @@ def _de_json(dato):
     return dato
 
 
+def _reemplazar(temporal, ruta, intentos=REINTENTOS_REEMPLAZO):
+    """
+    os.replace con reintentos: en Windows falla con PermissionError si otro proceso (antivirus,
+    indexador o quien lee el archivo) lo tiene abierto en ese instante.
+    """
+    for intento in range(intentos):
+        try:
+            os.replace(temporal, ruta)
+            return
+        except PermissionError:
+            if intento == intentos - 1:
+                raise
+            time.sleep(PAUSA_REEMPLAZO_SEG)
+
+
 def _escribir_bytes(ruta, contenido):
     """Escribe en un temporal de la misma carpeta y lo cambia de lugar de golpe."""
     ruta = Path(ruta)
@@ -57,7 +79,7 @@ def _escribir_bytes(ruta, contenido):
             f.write(contenido)
             f.flush()
             os.fsync(f.fileno())
-        os.replace(temporal, ruta)
+        _reemplazar(temporal, ruta)
     except BaseException:
         with contextlib.suppress(OSError):
             os.unlink(temporal)
@@ -156,14 +178,37 @@ def fallas_del_dia(domingo, raiz=RAIZ_DOMINGO):
     return _leer_json(carpeta(domingo, raiz) / "fallas.json", [])
 
 
+# --- estado de la API de llamadas (suspensión por fallas seguidas) ----------------------------
+
+def leer_estado_api(domingo, raiz=RAIZ_DOMINGO):
+    """Fallas seguidas de la API, desde cuándo están suspendidas las llamadas y si ya se avisó."""
+    por_omision = {"fallas_seguidas": 0, "suspendida_desde": None, "aviso_enviado": False, "ultimas_fallas": []}
+    return {**por_omision, **_leer_json(carpeta(domingo, raiz) / "api.json", {})}
+
+
+def guardar_estado_api(domingo, datos, raiz=RAIZ_DOMINGO):
+    _escribir_json(carpeta(domingo, raiz) / "api.json", datos)
+
+
 # --- candado -----------------------------------------------------------------------------------
+
+def _ficha_de(ruta):
+    try:
+        return Path(ruta).read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return None
+
 
 @contextlib.contextmanager
 def candado(raiz=RAIZ_DOMINGO):
     """
-    Candado entre procesos con un archivo creado de forma exclusiva. Si ya existe y tiene menos de
-    2 horas lanza CandadoOcupado; si es más viejo se considera abandonado y se reemplaza. El
-    archivo propio siempre se borra al salir, aunque el cuerpo falle.
+    Candado entre procesos con un archivo creado de forma exclusiva, que guarda una ficha única de
+    quien lo tiene. Si ya existe y se refrescó hace menos de 20 minutos lanza CandadoOcupado; si es
+    más viejo se considera abandonado (un latido que murió) y se reemplaza.
+
+    Entrega una función refrescar(): quien tiene el candado la llama seguido (antes de cada llamada y
+    de cada consulta) para que no parezca abandonado; si otro proceso se quedó con él, lanza
+    CandadoPerdido. Al salir solo se borra el archivo si todavía trae la ficha propia.
     """
     ruta = Path(raiz) / "latido.lock"
     ruta.parent.mkdir(parents=True, exist_ok=True)
@@ -182,10 +227,18 @@ def candado(raiz=RAIZ_DOMINGO):
             fd = os.open(ruta, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         except FileExistsError:
             raise CandadoOcupado("Otro proceso tomó el candado primero") from None
-    with os.fdopen(fd, "w") as f:
-        f.write(str(os.getpid()))
+    ficha = f"{os.getpid()}-{uuid.uuid4().hex}"
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(ficha)
+
+    def refrescar():
+        if _ficha_de(ruta) != ficha:
+            raise CandadoPerdido("Otro proceso se quedó con el candado del latido")
+        os.utime(ruta, None)
+
     try:
-        yield
+        yield refrescar
     finally:
-        with contextlib.suppress(FileNotFoundError):
-            ruta.unlink()
+        if _ficha_de(ruta) == ficha:
+            with contextlib.suppress(FileNotFoundError):
+                ruta.unlink()

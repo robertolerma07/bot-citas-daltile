@@ -1,5 +1,6 @@
 """Pruebas del latido del domingo: reloj fijo, tmp_path como raíz y llamadas y correos falsos (sin red)."""
 
+import contextlib
 import re
 from datetime import date, datetime
 
@@ -62,7 +63,7 @@ class Telefonia:
         self._viaje_de[conversacion] = viaje["viaje"]
         return conversacion
 
-    def esperar_resultado(self, conversacion, env):
+    def esperar_resultado(self, conversacion, env, dormir=None):
         self.consultas.append(conversacion)
         respuesta = self.respuestas[self._viaje_de.get(conversacion, conversacion)]
         if isinstance(respuesta, Exception):
@@ -133,6 +134,65 @@ def test_candado_ocupado_no_hace_nada(tmp_path, cal):
     bitacora = _latido(dom(13, 0), tel, correo, tmp_path, cal)
     assert len(bitacora) == 1 and "candado" in bitacora[0]
     assert tel.llamadas == [] and correo.enviados == []
+
+
+def test_refresca_el_candado_antes_de_cada_llamada_y_consulta(tmp_path, cal):
+    _aprobar(tmp_path, VIAJES_RONDA)
+    eventos = []
+
+    @contextlib.contextmanager
+    def candado_falso(raiz):
+        yield lambda: eventos.append("refresco")
+
+    tel = Telefonia(RESPUESTAS_RONDA)
+
+    def llamar(viaje, variables, env):
+        eventos.append("llamar")
+        return tel.llamar(viaje, variables, env)
+
+    def esperar(conversacion, env, dormir=None):
+        dormir(10)  # la telefonía real duerme entre consulta y consulta
+        eventos.append("consulta")
+        return tel.esperar_resultado(conversacion, env)
+
+    ejecutar_latido(dom(13, 0), cal, ENV, tmp_path, llamar, esperar, Correo().enviar, candado=candado_falso,
+                    dormir=lambda seg: eventos.append(f"dormir {seg}"))
+    assert eventos.count("llamar") == 3
+    for i, evento in enumerate(eventos):
+        if evento in ("llamar", "consulta"):
+            assert i > 0 and eventos[i - 1] == "refresco", eventos
+    assert eventos.count("dormir 10") == 3
+
+
+def test_candado_perdido_detiene_el_latido(tmp_path, cal):
+    _aprobar(tmp_path, VIAJES_RONDA)
+    tel, correo = Telefonia(RESPUESTAS_RONDA), Correo()
+
+    def llamar_y_perder(viaje, variables, env):
+        (tmp_path / "latido.lock").write_text("ficha-de-otro")  # otro latido se quedó con el candado
+        return tel.llamar(viaje, variables, env)
+
+    bitacora = ejecutar_latido(dom(13, 0), cal, ENV, tmp_path, llamar_y_perder, tel.esperar_resultado,
+                               correo.enviar)
+    assert tel.llamados() == ["V1"]
+    assert any("candado" in linea for linea in bitacora)
+    assert (tmp_path / "latido.lock").read_text() == "ficha-de-otro"
+
+
+def test_relee_los_estados_antes_de_cada_llamada(tmp_path, cal):
+    _aprobar(tmp_path, VIAJES_RONDA)
+    tel, correo = Telefonia(RESPUESTAS_RONDA), Correo()
+
+    def llamar(viaje, variables, env):
+        if viaje["viaje"] == "V1":  # mientras tanto, otro proceso ya resolvió V2
+            estados = almacen.cargar_estados(DOMINGO, raiz=tmp_path)
+            estados["V2"] = {**estado_inicial(), "estado": "a_tiempo", "intentos": 1, "ultimo_intento": dom(13, 0)}
+            almacen.guardar_estados(DOMINGO, estados, raiz=tmp_path)
+        return tel.llamar(viaje, variables, env)
+
+    ejecutar_latido(dom(13, 0), cal, ENV, tmp_path, llamar, tel.esperar_resultado, correo.enviar)
+    assert tel.llamados() == ["V1", "V3"]
+    assert _estados(tmp_path)["V2"]["estado"] == "a_tiempo"
 
 
 def test_sin_lista_avisa_una_vez(tmp_path, cal):
@@ -265,32 +325,102 @@ def test_detener_a_media_ronda(tmp_path, cal):
     assert _estados(tmp_path)["V1"]["estado"] == "a_tiempo"  # la llamada en curso sí termina
 
 
+class ApiCaida:
+    """llamar falso: lanza ErrorTelefonia mientras 'caida' sea True; si no, llama con la Telefonia falsa."""
+
+    def __init__(self, tel):
+        self.tel = tel
+        self.caida = True
+        self.intentos = []
+
+    def llamar(self, viaje, variables, env):
+        self.intentos.append(viaje["viaje"])
+        if self.caida:
+            raise ErrorTelefonia("ElevenLabs rechazó la llamada (HTTP 500)")
+        return self.tel.llamar(viaje, variables, env)
+
+
+def _latido_api(ahora, api, correo, raiz, cal):
+    return ejecutar_latido(ahora, cal, ENV, raiz, api.llamar, api.tel.esperar_resultado, correo.enviar)
+
+
 def test_tres_fallas_api_suspenden(tmp_path, cal):
     _aprobar(tmp_path, [_viaje(n, "ana@m.com") for n in range(1, 6)])
-    intentos = []
-
-    def llamar_falla(viaje, variables, env):
-        intentos.append(viaje["viaje"])
-        raise ErrorTelefonia("ElevenLabs rechazó la llamada (HTTP 500)")
-
-    tel, correo = Telefonia({}), Correo()
-    ejecutar_latido(dom(13, 0), cal, ENV, tmp_path, llamar_falla, tel.esperar_resultado, correo.enviar)
-    assert intentos == ["V1", "V2", "V3"]
+    api, correo = ApiCaida(Telefonia({})), Correo()
+    _latido_api(dom(13, 0), api, correo, tmp_path, cal)
+    assert api.intentos == ["V1", "V2", "V3"]
     assert len(correo.enviados) == 1 and "Fallas de la API" in correo.enviados[0].asunto
     assert "HTTP 500" in correo.enviados[0].cuerpo
     estados = _estados(tmp_path)
-    for v in ("V1", "V2", "V3"):
-        assert estados[v]["estado"] == "sin_respuesta" and estados[v]["intentos"] == 1
-        assert estados[v]["fallas_api"] == 1
-    assert estados["V4"]["estado"] == "pendiente" and estados["V5"]["estado"] == "pendiente"
+    for v in ("V1", "V2", "V3"):  # no se gastó su intento: no hubo llamada
+        assert estados[v]["estado"] == "pendiente" and estados[v]["intentos"] == 0
+        assert estados[v]["historial"] == [] and estados[v]["fallas_api"] == 1
     assert not almacen.ya_hecho(DOMINGO, "correo_1300", raiz=tmp_path)
+    assert any("HTTP 500" in f["texto"] for f in almacen.fallas_del_dia(DOMINGO, raiz=tmp_path))
 
-    # El siguiente latido intenta a los que faltan; el aviso de fallas no se repite
-    ejecutar_latido(dom(13, 5), cal, ENV, tmp_path, llamar_falla, tel.esperar_resultado, correo.enviar)
-    assert intentos[3:] == ["V4", "V5"]
+
+def test_suspension_sigue_en_el_siguiente_latido_y_luego_un_sondeo(tmp_path, cal):
+    _aprobar(tmp_path, [_viaje(n, "ana@m.com") for n in range(1, 6)])
+    api, correo = ApiCaida(Telefonia({})), Correo()
+    _latido_api(dom(13, 0), api, correo, tmp_path, cal)
+    _latido_api(dom(13, 5), api, correo, tmp_path, cal)
+    _latido_api(dom(13, 10), api, correo, tmp_path, cal)
+    assert api.intentos == ["V1", "V2", "V3"]  # 15 minutos sin llamar
+    _latido_api(dom(13, 15), api, correo, tmp_path, cal)
+    assert api.intentos[3:] == ["V1"]  # un solo sondeo por latido
+    _latido_api(dom(13, 20), api, correo, tmp_path, cal)
+    assert len(api.intentos) == 5
+    assert len(correo.con_asunto("Fallas de la API")) == 1  # un aviso por caída
+    assert all(e["intentos"] == 0 for e in _estados(tmp_path).values())
+
+
+def test_la_api_se_recupera_y_se_llama_a_todos(tmp_path, cal):
+    _aprobar(tmp_path, [_viaje(n, "ana@m.com") for n in range(1, 6)])
+    respuestas = {f"V{n}": A_TIEMPO for n in range(1, 6)}
+    api, correo = ApiCaida(Telefonia(respuestas)), Correo()
+    _latido_api(dom(13, 0), api, correo, tmp_path, cal)
+    api.caida = False
+    _latido_api(dom(13, 15), api, correo, tmp_path, cal)
+    assert api.tel.llamados() == ["V1", "V2", "V3", "V4", "V5"]  # el sondeo salió: se reanuda en el mismo latido
+    estados = _estados(tmp_path)
+    assert all(e["estado"] == "a_tiempo" and e["intentos"] == 1 for e in estados.values())
+    assert almacen.leer_estado_api(DOMINGO, raiz=tmp_path)["suspendida_desde"] is None
+    assert len(correo.con_asunto("Control de la ronda de las 13:00")) == 1
+
+
+def test_otra_caida_avisa_otra_vez(tmp_path, cal):
+    _aprobar(tmp_path, [_viaje(n, "ana@m.com") for n in range(1, 8)])
+    respuestas = {f"V{n}": NO_CONTESTA for n in range(1, 8)}
+    api, correo = ApiCaida(Telefonia(respuestas)), Correo()
+    _latido_api(dom(13, 0), api, correo, tmp_path, cal)   # caída 1: V1, V2, V3
+    api.caida = False
+    _latido_api(dom(13, 15), api, correo, tmp_path, cal)  # se recupera: llama a los 7
+    api.caida = True
+    _latido_api(dom(19, 0), api, correo, tmp_path, cal)   # caída 2 en los reintentos
+    assert len(correo.con_asunto("Fallas de la API")) == 2
+
+
+def test_falla_de_api_no_se_reintenta_en_el_mismo_latido(tmp_path, cal):
+    _aprobar(tmp_path, VIAJES_RONDA[:2])
+    api, correo = ApiCaida(Telefonia({})), Correo()
+    _latido_api(dom(13, 0), api, correo, tmp_path, cal)
+    assert api.intentos == ["V1", "V2"]  # cada uno una vez; dos fallas, aún sin suspender
+    _latido_api(dom(13, 5), api, correo, tmp_path, cal)
+    assert api.intentos == ["V1", "V2"]  # 10 minutos entre intentos del mismo viaje
+    _latido_api(dom(13, 10), api, correo, tmp_path, cal)
+    assert api.intentos == ["V1", "V2", "V1"]  # la tercera falla seguida (en otro latido) suspende
     assert len(correo.con_asunto("Fallas de la API")) == 1
-    control = correo.con_asunto("Control de la ronda de las 13:00")
-    assert len(control) == 1 and "HTTP 500" in control[0].cuerpo
+    assert almacen.leer_estado_api(DOMINGO, raiz=tmp_path)["suspendida_desde"] == dom(13, 10)
+
+
+def test_caida_toda_la_tarde_pasa_a_monitoreo_a_las_2100(tmp_path, cal):
+    _aprobar(tmp_path, VIAJES_RONDA)
+    api, correo = ApiCaida(Telefonia({})), Correo()
+    _latido_api(dom(13, 0), api, correo, tmp_path, cal)
+    _latido_api(dom(21, 0), api, correo, tmp_path, cal)
+    estados = _estados(tmp_path)
+    assert all(e["estado"] == "monitoreo" and e["intentos"] == 0 for e in estados.values())
+    assert len(correo.con_asunto("caso(s) nuevo(s)")) == 3
 
 
 def test_una_llamada_buena_reinicia_las_fallas_seguidas(tmp_path, cal):

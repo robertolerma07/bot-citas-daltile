@@ -12,7 +12,9 @@ reinicia a media llamada, el siguiente latido la resuelve por su conversación. 
   3. Resuelve las llamadas que quedaron "en curso" en un latido anterior.
   4. Llama, una por una, a quien le toque (ronda de las 13:00, reintentos de las 19:00 y 19:30),
      salvo que el domingo esté detenido o se llegue al tope de llamadas.
-  5. Con 3 fallas seguidas de la API: aviso a control (una sola vez) y no llama más en este latido.
+  5. Una falla de la API (no salió la llamada) no gasta el intento del viaje. Con 3 fallas seguidas
+     se suspenden las llamadas 15 minutos (también para los latidos siguientes) y se avisa a control
+     una vez por caída; después se prueba con una sola llamada por latido hasta que una salga.
   6. Al terminar cada ronda: avisos de los casos nuevos a monitoreo y correo de control. Desde las
      21:00, lo que no se pudo llamar pasa a monitoreo para que alguien lo siga.
   7. Lunes después de las 7:00: resumen con el Excel, una sola vez.
@@ -22,6 +24,7 @@ Nunca imprime keys ni contraseñas, y la bitácora no trae teléfonos completos.
 
 import copy
 import sys
+import time
 from datetime import date, datetime, timedelta
 
 from domingo import almacen, avisos, telefonia
@@ -34,6 +37,7 @@ from lib.seguridad import RUTA_LISTA_BLANCA, ZONA_CDMX, cargar_env
 
 RAIZ_DATOS = almacen.RAIZ_DOMINGO
 MAX_FALLAS_API_SEGUIDAS = 3
+MINUTOS_SUSPENSION_API = 15  # tras 3 fallas seguidas; después, un sondeo por latido
 MINUTOS_MAXIMOS_EN_CURSO = 60  # una conversación que no se puede leer en este tiempo cuenta como sin respuesta
 MOTIVO_SIN_LLAMADA = "No se pudo completar la llamada"
 VARIABLES_TELEFONIA = ("ELEVENLABS_API_KEY", "ELEVENLABS_AGENT_ID_SEGUIMIENTO", "ELEVENLABS_PHONE_NUMBER_ID")
@@ -88,24 +92,31 @@ def _ultimos_4(telefono):
 # --------------------------------------------------------------------------- el latido
 
 def ejecutar_latido(ahora, cal, env, raiz, llamar, esperar_resultado, enviar,
-                    ruta_lista=RUTA_LISTA_BLANCA, reloj=None):
+                    ruta_lista=RUTA_LISTA_BLANCA, reloj=None, candado=None, dormir=time.sleep):
     """
     Hace lo que toque en este momento y regresa la bitácora (una línea por acción). 'llamar',
     'esperar_resultado' y 'enviar' son las de telefonia y avisos (o falsas en las pruebas). 'reloj'
     da la hora en cada paso, porque un latido con muchas llamadas dura minutos; sin reloj se usa
-    'ahora' en todo el latido.
+    'ahora' en todo el latido. 'candado' (por omisión almacen.candado) entrega la función que
+    refresca el candado: se llama antes de cada llamada y de cada consulta del resultado, para que
+    otro latido no lo crea abandonado. 'dormir' es la pausa entre consultas.
     """
     bitacora = []
+    candado = candado or almacen.candado
     try:
-        with almacen.candado(raiz):
-            _Latido(ahora, cal, env, raiz, llamar, esperar_resultado, enviar, ruta_lista, reloj, bitacora).correr()
+        with candado(raiz) as refrescar:
+            _Latido(ahora, cal, env, raiz, llamar, esperar_resultado, enviar, ruta_lista, reloj, bitacora,
+                    refrescar, dormir).correr()
     except almacen.CandadoOcupado:
         bitacora.append("Otro latido sigue trabajando (candado ocupado); este no hace nada.")
+    except almacen.CandadoPerdido:
+        bitacora.append("Otro latido se quedó con el candado; este se detiene sin llamar a nadie más.")
     return bitacora
 
 
 class _Latido:
-    def __init__(self, ahora, cal, env, raiz, llamar, esperar_resultado, enviar, ruta_lista, reloj, bitacora):
+    def __init__(self, ahora, cal, env, raiz, llamar, esperar_resultado, enviar, ruta_lista, reloj, bitacora,
+                 refrescar, dormir):
         self.inicio = _en_cdmx(ahora)
         self.cal = cal
         self.env = env
@@ -116,11 +127,14 @@ class _Latido:
         self.ruta_lista = ruta_lista
         self.reloj = reloj
         self.bitacora = bitacora
+        self.refrescar = refrescar
+        self._dormir = dormir
         self.correo_control = (env.get("CORREO_CONTROL") or "").strip()
         self.domingo = None
         self.viajes = []
         self.estados = {}
         self.bloqueados = set()  # viajes que no pasaron la lista blanca en este latido
+        self.fallaron_api = set()  # viajes cuya llamada no salió en este latido: no se reintentan en él
 
     # ----------------------------------------------------------------- utilidades
 
@@ -135,8 +149,20 @@ class _Latido:
         self.anota(texto)
         almacen.anotar_falla(self.domingo, texto, self.ahora(), self.raiz)
 
-    def guardar(self):
+    def recargar(self):
+        """Vuelve a leer los estados del disco (lo guardado manda sobre lo que hay en memoria)."""
+        self.estados = almacen.estados_de(self.domingo, self.viajes, self.raiz)
+
+    def guardar_viaje(self, id_viaje, estado):
+        """Guarda solo el estado de este viaje sobre lo que hay en disco, sin pisar a los demás."""
+        self.recargar()
+        self.estados[id_viaje] = estado
         almacen.guardar_estados(self.domingo, self.estados, self.raiz)
+
+    def dormir_y_refrescar(self, segundos):
+        """Pausa entre consultas del resultado: al despertar refresca el candado antes de consultar."""
+        self._dormir(segundos)
+        self.refrescar()
 
     def detenido(self):
         return almacen.detenido(self.domingo, self.raiz)
@@ -148,10 +174,11 @@ class _Latido:
         almacen.marcar_hecho(self.domingo, clave, self.ahora(), self.raiz)
 
     def enviar(self, aviso):
+        self.refrescar()
         return self._enviar(aviso, self.env)
 
     def llamadas_del_domingo(self):
-        """Llamadas intentadas hoy (incluidas las que fallaron y las que siguen en curso)."""
+        """Llamadas hechas hoy, incluidas las que siguen en curso (las que no salieron no cuentan)."""
         return sum(e.get("intentos", 0) + (1 if e.get("en_curso") else 0) for e in self.estados.values())
 
     def tope_alcanzado(self):
@@ -208,7 +235,8 @@ class _Latido:
         try:
             if not conversacion:
                 raise ErrorTelefonia("la llamada en curso no tiene conversación")
-            resultado = self._esperar(conversacion, self.env)
+            self.refrescar()
+            resultado = self._esperar(conversacion, self.env, dormir=self.dormir_y_refrescar)
         except ErrorTelefonia as e:
             if self.ahora() - inicio < timedelta(minutes=MINUTOS_MAXIMOS_EN_CURSO):
                 self.anota(f"Viaje {id_viaje}: todavía no hay resultado de la llamada ({e}); "
@@ -221,16 +249,16 @@ class _Latido:
         resultado = normalizar_fecha_estimada(viaje, resultado)
         decision = decidir(viaje, resultado, inicio)
         nuevo = aplicar(estado, decision, resultado, inicio, self.cal, conversacion)
-        self.estados[id_viaje] = nuevo
-        self.guardar()
+        self.guardar_viaje(id_viaje, nuevo)
         self.anota(f"Viaje {id_viaje}: llamada {nuevo['intentos']} -> {decision} (queda en {nuevo['estado']}).")
 
     # ----------------------------------------------------------------- 4 y 5. llamadas
 
     def llamar_a_quien_toque(self):
         faltan = [n for n in VARIABLES_TELEFONIA if not (self.env.get(n) or "").strip()]
-        fallas_seguidas = []
+        sondeo_hecho = False
         while True:
+            self.recargar()  # otro proceso pudo haber cambiado algo durante la llamada anterior
             momento = self.ahora()
             viaje = self.siguiente_por_llamar(momento)
             if viaje is None:
@@ -250,19 +278,45 @@ class _Latido:
                 self.bloqueados.add(viaje["viaje"])
                 continue
 
+            api = almacen.leer_estado_api(self.domingo, self.raiz)
+            suspendida = api["suspendida_desde"]
+            if suspendida is not None:
+                hasta = suspendida + timedelta(minutes=MINUTOS_SUSPENSION_API)
+                if momento < hasta:
+                    self.anota(f"Llamadas suspendidas por fallas de la API hasta las {hasta:%H:%M}.")
+                    return
+                if sondeo_hecho:
+                    return
+                sondeo_hecho = True
+                self.anota("Se prueba la API con una sola llamada (sigue la suspensión por fallas).")
+
+            self.refrescar()
             falla = self.llamar(viaje, momento)
             if falla is None:
-                fallas_seguidas = []
-            else:
-                fallas_seguidas.append(falla)
-            if len(fallas_seguidas) >= MAX_FALLAS_API_SEGUIDAS:
-                self.avisar_fallas_api(fallas_seguidas)
+                if api["fallas_seguidas"] or suspendida is not None:
+                    self.anota("La API de llamadas responde otra vez; se reanudan las llamadas.")
+                    almacen.guardar_estado_api(self.domingo, {**api, "fallas_seguidas": 0, "suspendida_desde": None,
+                                                              "aviso_enviado": False, "ultimas_fallas": []},
+                                               self.raiz)
+                continue
+
+            api["fallas_seguidas"] += 1
+            api["ultimas_fallas"] = (api["ultimas_fallas"] + [falla])[-MAX_FALLAS_API_SEGUIDAS:]
+            if suspendida is not None:
+                almacen.guardar_estado_api(self.domingo, api, self.raiz)
+                self.anota("La prueba de la API falló; las llamadas siguen suspendidas.")
                 return
+            if api["fallas_seguidas"] >= MAX_FALLAS_API_SEGUIDAS:
+                api["suspendida_desde"] = momento
+                almacen.guardar_estado_api(self.domingo, api, self.raiz)
+                self.suspender_por_fallas_api(api)
+                return
+            almacen.guardar_estado_api(self.domingo, api, self.raiz)
 
     def siguiente_por_llamar(self, momento):
         """El primer viaje de la lista aprobada al que le toca llamada en este momento, o None."""
         for viaje in self.viajes:
-            if viaje["viaje"] in self.bloqueados:
+            if viaje["viaje"] in self.bloqueados or viaje["viaje"] in self.fallaron_api:
                 continue
             ultima = self.ultima_llamada_al_telefono(viaje["telefono"])
             if toca_llamar(viaje, self.estados[viaje["viaje"]], momento, self.cal, ultima):
@@ -270,7 +324,10 @@ class _Latido:
         return None
 
     def ultima_llamada_al_telefono(self, telefono):
-        """La llamada más reciente a ese teléfono entre todos los viajes aprobados (o None)."""
+        """
+        La llamada más reciente a ese teléfono entre todos los viajes aprobados (o None). Un intento que
+        no salió por falla de la API también cuenta, para no reintentarlo antes de 10 minutos.
+        """
         momentos = []
         for viaje in self.viajes:
             if viaje["telefono"] != telefono:
@@ -280,6 +337,8 @@ class _Latido:
                 momentos.append(estado["ultimo_intento"])
             if estado.get("en_curso") and estado["en_curso"].get("inicio"):
                 momentos.append(estado["en_curso"]["inicio"])
+            if estado.get("ultimo_fallo_api"):
+                momentos.append(estado["ultimo_fallo_api"])
         return max(momentos, default=None)
 
     def en_lista_blanca(self, viaje):
@@ -295,36 +354,42 @@ class _Latido:
         return True
 
     def llamar(self, viaje, momento):
-        """Hace una llamada y la resuelve. Regresa None si la llamada salió, o el texto de la falla."""
+        """
+        Hace una llamada y la resuelve. Regresa None si la llamada salió, o el texto de la falla. Si la
+        API falla no hubo llamada: no se gasta el intento, solo se anota y se espera para reintentar.
+        """
         id_viaje = viaje["viaje"]
         estado = self.estados[id_viaje]
         numero = estado.get("intentos", 0) + 1
         try:
             conversacion = self._llamar(viaje, variables_de_llamada(viaje, momento), self.env)
         except ErrorTelefonia as e:
-            texto = f"Viaje {id_viaje}, llamada {numero}: no se pudo llamar ({e})"
-            nuevo = aplicar(estado, "sin_respuesta", {}, momento, self.cal, None)
+            texto = f"Viaje {id_viaje}: no se pudo llamar ({e})"
+            nuevo = copy.deepcopy(estado)
             nuevo["fallas_api"] = estado.get("fallas_api", 0) + 1
-            nuevo["historial"][-1]["falla"] = str(e)
-            self.estados[id_viaje] = nuevo
-            self.guardar()
-            self.falla(texto + f"; cuenta como sin respuesta (queda en {nuevo['estado']})")
+            nuevo["ultimo_fallo_api"] = momento
+            self.guardar_viaje(id_viaje, nuevo)
+            self.fallaron_api.add(id_viaje)
+            self.falla(texto + "; no cuenta como intento y se reintenta en 10 minutos o más")
             return texto
 
         # Se guarda la conversación ANTES de esperar: si el proceso se cae, el siguiente latido la resuelve
-        self.estados[id_viaje] = {**estado, "estado": "en_curso",
-                                  "en_curso": {"conversacion_id": conversacion, "inicio": momento}}
-        self.guardar()
+        self.guardar_viaje(id_viaje, {**estado, "estado": "en_curso",
+                                      "en_curso": {"conversacion_id": conversacion, "inicio": momento}})
         self.anota(f"Viaje {id_viaje}: llamada {numero} iniciada (conversación {conversacion}).")
         self.resolver(viaje)
         return None
 
-    def avisar_fallas_api(self, fallas):
-        self.anota(f"{len(fallas)} fallas seguidas de la API de llamadas: no se llama más en este latido.")
-        if self.ya_hecho("fallas_api"):
+    def suspender_por_fallas_api(self, api):
+        """Suspende las llamadas y avisa a control una sola vez por caída."""
+        self.anota(f"{MAX_FALLAS_API_SEGUIDAS} fallas seguidas de la API de llamadas: se suspenden las llamadas "
+                   f"{MINUTOS_SUSPENSION_API} minutos.")
+        if api["aviso_enviado"]:
             return
-        ok = self.enviar(avisos.aviso_fallas_api(self.domingo.isoformat(), fallas, self.correo_control))
-        self.marcar_hecho("fallas_api")
+        ok = self.enviar(avisos.aviso_fallas_api(self.domingo.isoformat(), api["ultimas_fallas"],
+                                                 self.correo_control))
+        api["aviso_enviado"] = True
+        almacen.guardar_estado_api(self.domingo, api, self.raiz)
         self.anota("Aviso de fallas de la API " + ("enviado a control." if ok else "NO se pudo enviar."))
 
     # ----------------------------------------------------------------- 6. fin de la ventana y rondas
@@ -345,8 +410,7 @@ class _Latido:
             nota.update({campo: None for campo in CAMPOS_EXTRAIDOS})
             nota["motivo"] = MOTIVO_SIN_LLAMADA
             nuevo["historial"].append(nota)
-            self.estados[viaje["viaje"]] = nuevo
-            self.guardar()
+            self.guardar_viaje(viaje["viaje"], nuevo)
             self.anota(f"Viaje {viaje['viaje']}: pasa a monitoreo ({MOTIVO_SIN_LLAMADA.lower()} "
                        f"antes de las {self.cal['ventana_llamadas']['hasta']}).")
 
@@ -409,8 +473,7 @@ class _Latido:
                 destino = correo or "control (viajes sin persona de monitoreo)"
                 if self.enviar(aviso):
                     for v in casos:
-                        self.estados[v["viaje"]]["aviso_pendiente"] = False
-                    self.guardar()
+                        self.guardar_viaje(v["viaje"], {**self.estados[v["viaje"]], "aviso_pendiente": False})
                     self.anota(f"Aviso de {len(casos)} caso(s) enviado a {destino}.")
                 else:
                     self.falla(f"No salió el aviso de {len(casos)} caso(s) a {destino}; "

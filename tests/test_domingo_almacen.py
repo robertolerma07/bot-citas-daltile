@@ -8,7 +8,7 @@ from datetime import date, datetime, timedelta
 import pytest
 
 from domingo import almacen
-from domingo.almacen import CandadoOcupado
+from domingo.almacen import CandadoOcupado, CandadoPerdido
 from domingo.reglas import estado_inicial
 from lib.seguridad import ZONA_CDMX
 
@@ -146,3 +146,80 @@ def test_fallas_del_dia_sin_repetir(tmp_path):
     fallas = almacen.fallas_del_dia(DOMINGO, raiz=tmp_path)
     assert [f["texto"] for f in fallas] == ["Viaje V1: fuera de la lista blanca", "Falta CORREO_CONTROL"]
     assert datetime.fromisoformat(fallas[0]["cuando"]) == AHORA
+
+
+def _envejecer(ruta, minutos):
+    hace = time.time() - minutos * 60
+    os.utime(ruta, (hace, hace))
+
+
+def test_candado_de_21_minutos_se_reemplaza_y_de_19_bloquea(tmp_path):
+    ruta = tmp_path / "latido.lock"
+    ruta.write_text("ficha-de-otro")
+    _envejecer(ruta, 19)
+    with pytest.raises(CandadoOcupado):
+        with almacen.candado(raiz=tmp_path):
+            pass
+    _envejecer(ruta, 21)
+    with almacen.candado(raiz=tmp_path):
+        assert ruta.read_text() != "ficha-de-otro"
+    assert not ruta.exists()
+
+
+def test_refrescar_mantiene_vivo_el_candado(tmp_path):
+    ruta = tmp_path / "latido.lock"
+    with almacen.candado(raiz=tmp_path) as refrescar:
+        _envejecer(ruta, 30)
+        refrescar()
+        assert time.time() - ruta.stat().st_mtime < 60
+        with pytest.raises(CandadoOcupado):  # quien llegue ahora lo encuentra vivo
+            with almacen.candado(raiz=tmp_path):
+                pass
+    assert not ruta.exists()
+
+
+def test_candado_ajeno_no_se_borra_y_refrescar_avisa(tmp_path):
+    ruta = tmp_path / "latido.lock"
+    with almacen.candado(raiz=tmp_path) as refrescar:
+        ruta.write_text("ficha-de-otro")  # otro proceso lo tomó
+        with pytest.raises(CandadoPerdido):
+            refrescar()
+    assert ruta.read_text() == "ficha-de-otro"  # al salir no se borra el candado ajeno
+
+
+def test_estado_de_la_api(tmp_path):
+    vacio = almacen.leer_estado_api(DOMINGO, raiz=tmp_path)
+    assert vacio == {"fallas_seguidas": 0, "suspendida_desde": None, "aviso_enviado": False, "ultimas_fallas": []}
+    datos = {**vacio, "fallas_seguidas": 3, "suspendida_desde": AHORA, "aviso_enviado": True,
+             "ultimas_fallas": ["HTTP 500"]}
+    almacen.guardar_estado_api(DOMINGO, datos, raiz=tmp_path)
+    assert almacen.leer_estado_api(DOMINGO, raiz=tmp_path) == datos
+
+
+def test_escritura_reintenta_si_windows_niega_el_reemplazo(tmp_path, monkeypatch):
+    # En Windows otro proceso (antivirus, indexador) puede tener abierto el archivo un instante
+    reemplazar = os.replace
+    fallas = {"quedan": 2}
+
+    def replace_que_falla(origen, destino):
+        if fallas["quedan"]:
+            fallas["quedan"] -= 1
+            raise PermissionError(5, "Access is denied")
+        return reemplazar(origen, destino)
+
+    monkeypatch.setattr(almacen.os, "replace", replace_que_falla)
+    monkeypatch.setattr(almacen.time, "sleep", lambda s: None)
+    almacen.guardar_estados(DOMINGO, {"V1": estado_inicial()}, raiz=tmp_path)
+    assert almacen.cargar_estados(DOMINGO, raiz=tmp_path) == {"V1": estado_inicial()}
+    assert list(almacen.carpeta(DOMINGO, tmp_path).glob("*.tmp")) == []
+
+
+def test_escritura_se_rinde_si_el_reemplazo_sigue_negado(tmp_path, monkeypatch):
+    def siempre_niega(origen, destino):
+        raise PermissionError(5, "Access is denied")
+
+    monkeypatch.setattr(almacen.os, "replace", siempre_niega)
+    monkeypatch.setattr(almacen.time, "sleep", lambda s: None)
+    with pytest.raises(PermissionError):
+        almacen.guardar_estados(DOMINGO, {"V1": estado_inicial()}, raiz=tmp_path)
+    assert list(almacen.carpeta(DOMINGO, tmp_path).glob("*.tmp")) == []
