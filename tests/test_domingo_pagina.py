@@ -20,7 +20,7 @@ sys.path.insert(0, str(RAIZ))
 
 from domingo import almacen  # noqa: E402
 from domingo.calendario import cargar_calendario  # noqa: E402
-from domingo.pagina import crear_app  # noqa: E402
+from domingo.pagina import crear_app, ocultar_telefonos  # noqa: E402
 from domingo.viajes import COLUMNAS_VIAJE  # noqa: E402
 from lib.seguridad import ZONA_CDMX  # noqa: E402
 
@@ -43,9 +43,19 @@ class Contexto:
         self.avisos = []
         self.enviar_ok = enviar_ok
         self.raiz = tmp_path / "domingo"
-        self.app = crear_app(self.raiz, ENV, cargar_calendario(), reloj=lambda: self.ahora,
+        self.env = dict(ENV)
+        self.cal = cargar_calendario()
+        self.campos = {}
+        self.app = crear_app(self.raiz, self.env, self.cal, reloj=lambda: self.ahora,
                              enviar=self._enviar, ruta_lista=ruta_lista)
         self.cliente = self.app.test_client()
+
+    def en(self, momento):
+        """Mueve el reloj sin vencer la sesión (que dura 12 horas): como si hubiera entrado en ese momento."""
+        self.ahora = momento
+        with self.cliente.session_transaction() as sesion:
+            if sesion.get("entro"):
+                sesion["entro_en"] = momento.timestamp()
 
     def _enviar(self, aviso, env):
         self.avisos.append(aviso)
@@ -60,11 +70,22 @@ class Contexto:
     def subir(self, ruta=VIAJES_OK, nombre="viajes.xlsx", contenido=None):
         token = self.token("/")
         datos = contenido if contenido is not None else Path(ruta).read_bytes()
-        return self.cliente.post("/subir", data={"csrf": token, "archivo": (io.BytesIO(datos), nombre)},
-                                 content_type="multipart/form-data")
+        r = self.cliente.post("/subir", data={"csrf": token, "archivo": (io.BytesIO(datos), nombre)},
+                              content_type="multipart/form-data")
+        self.campos = self._campos_de(texto(r))
+        return r
 
-    def aprobar(self, nombre="Ana Pérez"):
-        return self.cliente.post("/aprobar", data={"csrf": self.token("/"), "nombre": nombre})
+    @staticmethod
+    def _campos_de(html):
+        """Los campos ocultos del formulario de aprobar (la subida, el domingo y el total que se revisó)."""
+        return {n: v for n, v in re.findall(r'name="(subida|domingo|n)" value="([^"]*)"', html)}
+
+    def aprobar(self, nombre="Ana Pérez", campos=None):
+        datos = {"csrf": self.token("/"), "nombre": nombre, **(self.campos if campos is None else campos)}
+        r = self.cliente.post("/aprobar", data=datos)
+        if r.status_code != 302:  # si la página volvió a mostrar la revisión, esos son los campos vigentes
+            self.campos = self._campos_de(texto(r)) or self.campos
+        return r
 
     def detener(self, nombre="Ana Pérez"):
         return self.cliente.post("/detener", data={"csrf": self.token("/"), "nombre": nombre})
@@ -195,7 +216,7 @@ def test_aprobar_sin_subir_antes(adentro):
 
 def test_no_aprueba_domingo_despues_de_las_12(adentro):
     adentro.subir()
-    adentro.ahora = datetime(2026, 11, 29, 12, 30, tzinfo=ZONA_CDMX)
+    adentro.en(datetime(2026, 11, 29, 12, 30, tzinfo=ZONA_CDMX))
     r = adentro.aprobar()
     assert r.status_code == 403
     assert almacen.leer_aprobacion(DOMINGO, adentro.raiz) is None
@@ -209,7 +230,7 @@ def test_no_aprueba_domingo_despues_de_las_12(adentro):
 def test_aprobar_revalida(adentro, tmp_path):
     ruta = excel_con(tmp_path / "sabado.xlsx", fecha_cita="2026-11-28", hora="10:00")
     assert "Aprobar 1 llamada" in texto(adentro.subir(ruta))
-    adentro.ahora = datetime(2026, 11, 28, 11, 0, tzinfo=ZONA_CDMX)  # ya pasó la cita del sábado 10:00
+    adentro.en(datetime(2026, 11, 28, 11, 0, tzinfo=ZONA_CDMX))  # ya pasó la cita del sábado 10:00
     r = adentro.aprobar()
     assert r.status_code == 409
     assert "ya pasó" in texto(r)
@@ -285,7 +306,7 @@ def test_borra_subidas_viejas(adentro):
 # --- detener ------------------------------------------------------------------------------------
 
 def test_detener(adentro):
-    adentro.ahora = datetime(2026, 11, 29, 14, 0, tzinfo=ZONA_CDMX)  # también después de las 12:00
+    adentro.en(datetime(2026, 11, 29, 14, 0, tzinfo=ZONA_CDMX))  # también después de las 12:00
     assert adentro.detener("Luis Gómez").status_code == 302
     assert almacen.detenido(DOMINGO, adentro.raiz)["quien"] == "Luis Gómez"
     assert len(adentro.avisos) == 1 and "detenidas" in adentro.avisos[0].asunto.lower()
@@ -293,7 +314,7 @@ def test_detener(adentro):
 
 
 def test_detener_sin_nombre_falla(adentro):
-    adentro.ahora = DOMINGO_11
+    adentro.en(DOMINGO_11)
     assert adentro.detener("  ").status_code == 400
     assert almacen.detenido(DOMINGO, adentro.raiz) is None
 
@@ -304,7 +325,7 @@ def test_detener_fuera_de_domingo(adentro):
 
 
 def test_no_aprueba_si_esta_detenido(adentro):
-    adentro.ahora = DOMINGO_11
+    adentro.en(DOMINGO_11)
     adentro.detener()
     adentro.subir()
     assert adentro.aprobar().status_code == 409
@@ -324,7 +345,7 @@ def test_csrf(adentro):
 
 
 def test_telefono_enmascarado(adentro):
-    adentro.ahora = DOMINGO_11
+    adentro.en(DOMINGO_11)
     revisar = texto(adentro.subir())
     adentro.aprobar()
     inicio = texto(adentro.cliente.get("/"))
@@ -334,7 +355,7 @@ def test_telefono_enmascarado(adentro):
 
 
 def test_estado_del_domingo_en_curso(adentro):
-    adentro.ahora = DOMINGO_11
+    adentro.en(DOMINGO_11)
     adentro.subir()
     adentro.aprobar()
     viajes = almacen.leer_aprobacion(DOMINGO, adentro.raiz)["viajes"]
@@ -370,3 +391,101 @@ def test_encabezados_de_seguridad(adentro):
     assert "no-store" in r.headers["Cache-Control"]
     assert "default-src 'none'" in r.headers["Content-Security-Policy"]
     assert "viewport" in texto(r)
+
+
+# --- ronda de correcciones: aprobar exactamente lo revisado ---------------------------------------
+
+def test_aprueba_lo_que_se_reviso_y_no_otra_subida(adentro, tmp_path):
+    adentro.subir()                                    # A: 5 llamadas
+    campos_a = dict(adentro.campos)
+    adentro.subir(excel_con(tmp_path / "b.xlsx", fecha_cita="2026-11-30", hora="09:00"))  # B: otra pestaña
+    campos_b = dict(adentro.campos)
+    r = adentro.aprobar(campos=campos_a)
+    assert r.status_code == 409 and "otra lista" in texto(r)
+    assert almacen.leer_aprobacion(DOMINGO, adentro.raiz) is None and adentro.avisos == []
+    assert adentro.aprobar(campos=campos_b).status_code == 302
+    assert len(almacen.leer_aprobacion(DOMINGO, adentro.raiz)["viajes"]) == 1
+
+
+def test_no_aprueba_si_cambia_el_total_revisado(adentro):
+    adentro.subir()
+    r = adentro.aprobar(campos={**adentro.campos, "n": "4"})
+    assert r.status_code == 409 and "cambió" in texto(r)
+    assert almacen.leer_aprobacion(DOMINGO, adentro.raiz) is None
+
+
+def test_no_aprueba_sin_los_campos_de_la_revision(adentro):
+    adentro.subir()
+    assert adentro.aprobar(campos={}).status_code == 409
+    assert almacen.leer_aprobacion(DOMINGO, adentro.raiz) is None
+
+
+def test_no_aprueba_para_otro_domingo(adentro, tmp_path):
+    adentro.subir(excel_con(tmp_path / "v.xlsx", fecha_cita="2026-12-07", hora="09:00"))
+    adentro.en(datetime(2026, 11, 30, 10, 0, tzinfo=ZONA_CDMX))  # lunes: ahora se aprueba el 6 de diciembre
+    r = adentro.aprobar()
+    assert r.status_code == 409 and "domingo" in texto(r)
+    assert almacen.leer_aprobacion(DOMINGO, adentro.raiz) is None
+    assert almacen.leer_aprobacion(date(2026, 12, 6), adentro.raiz) is None
+
+
+def test_no_aprueba_una_subida_de_mas_de_un_dia(adentro):
+    adentro.subir()
+    for archivo in (adentro.raiz / "subidas").iterdir():
+        viejo = (datetime.now() - timedelta(days=2)).timestamp()
+        os.utime(archivo, (viejo, viejo))
+    r = adentro.aprobar()
+    assert r.status_code == 409 and "un día" in texto(r)
+    assert almacen.leer_aprobacion(DOMINGO, adentro.raiz) is None
+
+
+def test_advertencias_nuevas_se_muestran_antes_de_aprobar(adentro):
+    adentro.subir()  # sin advertencias
+    adentro.cal["rango_citas"]["hasta"] = "07:00"  # ahora la cita del lunes 08:00 queda fuera del rango
+    r = adentro.aprobar()
+    assert r.status_code == 409 and "fuera de" in texto(r) and "Aprobar 5 llamadas" in texto(r)
+    assert almacen.leer_aprobacion(DOMINGO, adentro.raiz) is None
+    assert adentro.aprobar().status_code == 302  # ya vistas, se aprueba
+
+
+# --- la sesión sigue a la contraseña y vence a las 12 horas -------------------------------------
+
+def test_cambiar_la_contrasena_cierra_las_sesiones(adentro):
+    assert adentro.cliente.get("/").status_code == 200
+    adentro.env["PAGINA_PASSWORD"] = "otra-clave-nueva"
+    r = adentro.cliente.get("/")
+    assert r.status_code == 302 and "/entrar" in r.headers["Location"]
+
+
+def test_la_sesion_vence_a_las_12_horas_aunque_haya_actividad(adentro):
+    assert adentro.cliente.get("/").status_code == 200
+    adentro.ahora += timedelta(hours=6)
+    assert adentro.cliente.get("/").status_code == 200  # la actividad no la alarga
+    adentro.ahora += timedelta(hours=6, minutes=1)
+    assert adentro.cliente.get("/").status_code == 302
+
+
+# --- teléfonos de operador en los mensajes del validador ------------------------------------------
+
+def test_los_mensajes_del_validador_no_muestran_telefonos_completos(adentro, tmp_path):
+    libro = Workbook()
+    hoja = libro.active
+    hoja.append(COLUMNAS_VIAJE)
+    base = {"linea": "L", "operador": "Op", "cliente": "C", "destino": "Zapopan, Jalisco",
+            "fecha_cita": "2026-11-30", "tipo_cita": "Hora", "hora": "08:00",
+            "correo_monitoreo": "m@ejemplo.com", "telefono_monitoreo": "55 5000 0003"}
+    for viaje, tel in (("300001", "+525500000001"), ("300002", "+525500000001"), ("300003", "+525599999999")):
+        hoja.append([{**base, "viaje": viaje, "telefono": tel}[c] for c in COLUMNAS_VIAJE])
+    ruta = tmp_path / "tel.xlsx"
+    libro.save(ruta)
+    for archivo in (ruta, VIAJES_MALOS):
+        html = texto(adentro.subir(archivo))
+        for completo in ("5500000001", "5599999999", "5500000002", "5599999999", "5000 0003", "5500000003"):
+            assert completo not in html, (archivo.name, completo)
+    html = texto(adentro.subir(ruta))
+    assert "lista blanca" in html and "…9999" in html and "…0001" in html
+
+
+def test_ocultar_telefonos_respeta_fechas_y_viajes():
+    assert ocultar_telefonos("la cita es el 2026-11-30 10:30 (viaje 104512)") == "la cita es el 2026-11-30 10:30 (viaje 104512)"
+    assert ocultar_telefonos("+525500000001 y 55 5000 0003 y (55) 5000-0004") == "…0001 y …0003 y (…0004"

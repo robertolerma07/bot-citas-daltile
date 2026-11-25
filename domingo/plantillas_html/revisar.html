@@ -16,7 +16,7 @@
   </div>
   {% endif %}
 
-  {% if puede_aprobar %}
+  {% if puede_aprobar and subida %}
   <h2>Llamadas que se harán el domingo {{ domingo }}</h2>
   <div class="tabla">
   <table>
@@ -31,6 +31,9 @@
   {% endif %}
   <form method="post" action="/aprobar">
     <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="subida" value="{{ subida.nombre }}">
+    <input type="hidden" name="domingo" value="{{ subida.domingo }}">
+    <input type="hidden" name="n" value="{{ subida.total }}">
     <label for="nombre">Tu nombre (quién aprueba)</label>
     <input id="nombre" type="text" name="nombre" maxlength="60" autocomplete="name" required>
     <button type="submit">Aprobar {{ filas|length }} llamada{{ '' if filas|length == 1 else 's' }}</button>

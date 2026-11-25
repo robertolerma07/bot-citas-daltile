@@ -13,6 +13,7 @@ El bloqueo por intentos fallidos vive en memoria (un solo proceso): si se reinic
 se borra. Es aceptable porque la contraseña es una sola y el reinicio es raro.
 """
 
+import hashlib
 import hmac
 import re
 import secrets
@@ -36,6 +37,8 @@ EDAD_MAXIMA_SUBIDA = 24 * 60 * 60        # segundos: las subidas más viejas se 
 LARGO_MIN_NOMBRE, LARGO_MAX_NOMBRE = 2, 60
 PATRON_SUBIDA = re.compile(r"^[0-9a-f]{32}\.xlsx\Z")
 FIRMA_XLSX = b"PK\x03\x04"               # un .xlsx es un zip
+# Una fecha AAAA-MM-DD (se deja tal cual) o una racha de 10 o más dígitos con separadores sueltos (un teléfono)
+PATRON_TELEFONO_EN_TEXTO = re.compile(r"\d{4}-\d{2}-\d{2}|\+?\d(?:[ .()-]{0,2}\d){9,}")
 
 ESTADOS = {
     "pendiente": "Pendiente", "en_curso": "Llamando", "sin_respuesta": "Sin respuesta",
@@ -56,6 +59,14 @@ def telefono_enmascarado(telefono):
     """Solo los últimos 4 dígitos: '+525500000001' -> '••••0001'."""
     digitos = re.sub(r"\D", "", telefono or "")
     return "••••" + digitos[-4:] if len(digitos) >= 4 else "••••"
+
+
+def ocultar_telefonos(texto):
+    """Los mensajes del validador traen teléfonos completos: aquí solo se ven los últimos 4 dígitos."""
+    def ocultar(m):
+        corrida = m.group(0)
+        return corrida if re.fullmatch(r"\d{4}-\d{2}-\d{2}", corrida) else "…" + re.sub(r"\D", "", corrida)[-4:]
+    return PATRON_TELEFONO_EN_TEXTO.sub(ocultar, texto)
 
 
 def _cita_texto(viaje):
@@ -126,9 +137,8 @@ def crear_app(raiz, env, cal, reloj=lambda: datetime.now(ZONA_CDMX), enviar=avis
     PAGINA_PASSWORD, PAGINA_SECRETO y CORREO_CONTROL, y 'reloj' y 'enviar' se pueden cambiar en las
     pruebas. Lanza ValueError si falta la contraseña o el secreto de la sesión.
     """
-    clave = env.get("PAGINA_PASSWORD") or ""
     secreto = env.get("PAGINA_SECRETO") or ""
-    if not clave:
+    if not env.get("PAGINA_PASSWORD"):
         raise ValueError("Falta PAGINA_PASSWORD en .env (la contraseña del equipo para la página)")
     if len(secreto) < 16:
         raise ValueError("Falta PAGINA_SECRETO en .env (al menos 16 caracteres al azar para firmar la sesión)")
@@ -145,10 +155,28 @@ def crear_app(raiz, env, cal, reloj=lambda: datetime.now(ZONA_CDMX), enviar=avis
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         PERMANENT_SESSION_LIFETIME=timedelta(hours=HORAS_SESION),
+        SESSION_REFRESH_EACH_REQUEST=False,  # la cookie vence 12 h después de entrar, no de la última visita
         MAX_CONTENT_LENGTH=TAMANO_MAXIMO + 512 * 1024,  # el archivo, más lo que ocupa el resto del formulario
     )
 
     # --- piezas comunes ---------------------------------------------------------------------------
+
+    def clave_actual():
+        return env.get("PAGINA_PASSWORD") or ""
+
+    def huella_de_clave():
+        """Huella de la contraseña vigente: si la cambian, las sesiones abiertas dejan de servir."""
+        return hmac.new(secreto.encode(), clave_actual().encode(), hashlib.sha256).hexdigest()
+
+    def sesion_vigente(ahora):
+        if not session.get("entro") or not clave_actual():
+            return False
+        if not hmac.compare_digest(str(session.get("huella", "")), huella_de_clave()):
+            return False
+        try:
+            return 0 <= ahora.timestamp() - float(session["entro_en"]) < HORAS_SESION * 3600
+        except (KeyError, TypeError, ValueError):
+            return False
 
     def token_csrf():
         if "csrf" not in session:
@@ -204,7 +232,9 @@ def crear_app(raiz, env, cal, reloj=lambda: datetime.now(ZONA_CDMX), enviar=avis
 
     @app.before_request
     def exigir_sesion_y_token():
-        if request.endpoint != "entrar" and not session.get("entro"):
+        if request.endpoint != "entrar" and not sesion_vigente(reloj()):
+            for clave_sesion in ("entro", "huella", "entro_en", "subida"):  # se conserva el token de la pantalla de entrar
+                session.pop(clave_sesion, None)
             return redirect(url_for("entrar"))
         if request.method == "POST":
             esperado, enviado = session.get("csrf") or "", request.form.get("csrf") or ""
@@ -240,18 +270,20 @@ def crear_app(raiz, env, cal, reloj=lambda: datetime.now(ZONA_CDMX), enviar=avis
         if bloqueos.bloqueada(ip, ahora):
             return pagina("entrar.html", 429, mensaje=f"Demasiados intentos. Espera {MINUTOS_BLOQUEO} minutos.")
         escrita = (request.form.get("password") or "").encode()
-        if not hmac.compare_digest(escrita, clave.encode()):
+        if not hmac.compare_digest(escrita, clave_actual().encode()):
             bloqueos.fallo(ip, ahora)
             return pagina("entrar.html", 401, mensaje="Contraseña incorrecta.")
         bloqueos.acierto(ip)
         session.clear()
         session["entro"] = True
+        session["huella"] = huella_de_clave()
+        session["entro_en"] = ahora.timestamp()
         session.permanent = True
         return redirect(url_for("inicio"))
 
     @app.post("/salir")
     def salir():
-        borrar_subida(session.get("subida"))
+        borrar_subida((session.get("subida") or {}).get("nombre"))
         session.clear()
         return redirect(url_for("entrar"))
 
@@ -282,11 +314,24 @@ def crear_app(raiz, env, cal, reloj=lambda: datetime.now(ZONA_CDMX), enviar=avis
 
     # --- subir y aprobar --------------------------------------------------------------------------
 
-    def revisar(codigo=200, errores=(), advertencias=(), viajes=(), domingo=None, puede_aprobar=False):
+    def revisar(codigo=200, errores=(), advertencias=(), viajes=(), domingo=None, puede_aprobar=False,
+                subida=None):
         vigente = aprobacion_resumida(domingo) if domingo else None
         filas = [_fila_de(v, {}) for v in viajes]
-        return pagina("revisar.html", codigo, errores=list(errores), advertencias=list(advertencias),
-                      filas=filas, domingo=domingo, puede_aprobar=puede_aprobar, vigente=vigente)
+        return pagina("revisar.html", codigo, errores=[ocultar_telefonos(e) for e in errores],
+                      advertencias=[ocultar_telefonos(a) for a in advertencias], filas=filas, domingo=domingo,
+                      puede_aprobar=puede_aprobar, vigente=vigente, subida=subida)
+
+    def huella_de_avisos(advertencias):
+        return hashlib.sha256("\n".join(advertencias).encode()).hexdigest()
+
+    def recordar_subida(nombre, domingo, advertencias):
+        """Lo que se está revisando en pantalla: aprobar solo vale para exactamente esto."""
+        session["subida"] = {"nombre": nombre, "domingo": domingo.isoformat(),
+                             "avisos": huella_de_avisos(advertencias)}
+
+    def campos_de(nombre, domingo, total):
+        return {"nombre": nombre, "domingo": domingo.isoformat(), "total": total}
 
     @app.post("/subir")
     def subir():
@@ -307,7 +352,7 @@ def crear_app(raiz, env, cal, reloj=lambda: datetime.now(ZONA_CDMX), enviar=avis
                                  f"{cal['aprobar_hasta']} del domingo."])
 
         limpiar_subidas_viejas()
-        borrar_subida(session.get("subida"))
+        borrar_subida((session.get("subida") or {}).get("nombre"))
         nombre = secrets.token_hex(16) + ".xlsx"
         carpeta_subidas.mkdir(parents=True, exist_ok=True)
         ruta = carpeta_subidas / nombre
@@ -316,11 +361,12 @@ def crear_app(raiz, env, cal, reloj=lambda: datetime.now(ZONA_CDMX), enviar=avis
         errores, advertencias, viajes = validar(ruta, domingo, ahora)
         puede = not errores and bool(viajes)  # cualquier error, aunque haya viajes, impide aprobar
         if puede:
-            session["subida"] = nombre
+            recordar_subida(nombre, domingo, advertencias)
         else:
             session.pop("subida", None)
             ruta.unlink(missing_ok=True)
-        return revisar(200, errores, advertencias, viajes, domingo, puede)
+        return revisar(200, errores, advertencias, viajes, domingo, puede,
+                       campos_de(nombre, domingo, len(viajes)) if puede else None)
 
     @app.post("/aprobar")
     def aprobar():
@@ -334,16 +380,33 @@ def crear_app(raiz, env, cal, reloj=lambda: datetime.now(ZONA_CDMX), enviar=avis
                          "del domingo.", 403)
         if almacen.detenido(domingo, raiz):
             return error("Las llamadas de ese domingo están detenidas; ya no se puede aprobar otra lista.", 409)
-        subida = session.get("subida")
-        if not subida or not PATRON_SUBIDA.match(subida) or not (carpeta_subidas / subida).is_file():
+        subida = session.get("subida") or {}
+        archivo = subida.get("nombre", "")
+        if not PATRON_SUBIDA.match(archivo) or not (carpeta_subidas / archivo).is_file():
             return error("No hay un Excel por aprobar. Sube la lista de nuevo.", 400)
+        # Solo se aprueba lo que se tiene en pantalla: la misma subida, para el mismo domingo, con el mismo total
+        if request.form.get("subida") != archivo:
+            return error("Esta pantalla ya no es de la última lista que subiste (¿subiste otra lista en otra "
+                         "pestaña?). Sube la lista de nuevo y revísala antes de aprobar.", 409)
+        if request.form.get("domingo") != subida.get("domingo") or subida.get("domingo") != domingo.isoformat():
+            return error("Esta lista se revisó para otro domingo. Sube la lista de nuevo.", 409)
+        ruta = carpeta_subidas / archivo
+        if time.time() - ruta.stat().st_mtime > EDAD_MAXIMA_SUBIDA:
+            return error("La lista se subió hace más de un día. Sube la lista de nuevo.", 409)
 
-        ruta = carpeta_subidas / subida
         errores, advertencias, viajes = validar(ruta, domingo, ahora)  # con la hora de ahora, no la de la subida
         if errores or not viajes:
             session.pop("subida", None)
             ruta.unlink(missing_ok=True)
             return revisar(409, errores or ["El archivo no tiene viajes."], advertencias, viajes, domingo, False)
+        if request.form.get("n") != str(len(viajes)):
+            return error(f"La lista cambió desde que la revisaste (ahora son {len(viajes)} llamadas). "
+                         "Sube la lista de nuevo.", 409)
+        if huella_de_avisos(advertencias) != subida.get("avisos"):
+            # Hay advertencias que quien revisó no vio: se muestra la revisión de nuevo y se aprueba con otro clic
+            recordar_subida(archivo, domingo, advertencias)
+            return revisar(409, errores, advertencias, viajes, domingo, True,
+                           campos_de(archivo, domingo, len(viajes)))
 
         almacen.guardar_aprobacion(domingo, viajes, ruta.read_bytes(), quien, ahora, raiz)
         ruta.unlink(missing_ok=True)
