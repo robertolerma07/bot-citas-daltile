@@ -367,9 +367,9 @@ def test_suspension_sigue_en_el_siguiente_latido_y_luego_un_sondeo(tmp_path, cal
     _latido_api(dom(13, 10), api, correo, tmp_path, cal)
     assert api.intentos == ["V1", "V2", "V3"]  # 15 minutos sin llamar
     _latido_api(dom(13, 15), api, correo, tmp_path, cal)
-    assert api.intentos[3:] == ["V1"]  # un solo sondeo por latido
+    assert api.intentos[3:] == ["V4"]  # un solo sondeo por latido, con un viaje sin fallas
     _latido_api(dom(13, 20), api, correo, tmp_path, cal)
-    assert len(api.intentos) == 5
+    assert api.intentos[4:] == ["V5"]
     assert len(correo.con_asunto("Fallas de la API")) == 1  # un aviso por caída
     assert all(e["intentos"] == 0 for e in _estados(tmp_path).values())
 
@@ -381,7 +381,8 @@ def test_la_api_se_recupera_y_se_llama_a_todos(tmp_path, cal):
     _latido_api(dom(13, 0), api, correo, tmp_path, cal)
     api.caida = False
     _latido_api(dom(13, 15), api, correo, tmp_path, cal)
-    assert api.tel.llamados() == ["V1", "V2", "V3", "V4", "V5"]  # el sondeo salió: se reanuda en el mismo latido
+    # El sondeo (V4, sin fallas) salió: se reanuda en el mismo latido, en el orden de la lista
+    assert api.tel.llamados() == ["V4", "V1", "V2", "V3", "V5"]
     estados = _estados(tmp_path)
     assert all(e["estado"] == "a_tiempo" and e["intentos"] == 1 for e in estados.values())
     assert almacen.leer_estado_api(DOMINGO, raiz=tmp_path)["suspendida_desde"] is None
@@ -421,6 +422,51 @@ def test_caida_toda_la_tarde_pasa_a_monitoreo_a_las_2100(tmp_path, cal):
     estados = _estados(tmp_path)
     assert all(e["estado"] == "monitoreo" and e["intentos"] == 0 for e in estados.values())
     assert len(correo.con_asunto("caso(s) nuevo(s)")) == 3
+
+
+def test_sondeo_prefiere_un_viaje_sin_fallas(tmp_path, cal):
+    _aprobar(tmp_path, [_viaje(n, "ana@m.com") for n in range(1, 5)])
+    api, correo = ApiCaida(Telefonia({})), Correo()
+    _latido_api(dom(13, 0), api, correo, tmp_path, cal)  # V1, V2, V3 fallan: se suspende
+    _latido_api(dom(13, 15), api, correo, tmp_path, cal)
+    assert api.intentos == ["V1", "V2", "V3", "V4"]  # V4 no ha fallado: se prueba con él
+    _latido_api(dom(13, 20), api, correo, tmp_path, cal)
+    assert api.intentos[4:] == ["V1"]  # ya todos fallaron una vez: el primero que toque
+
+
+def test_un_numero_que_no_marca_pasa_a_monitoreo_sin_detener_la_ronda(tmp_path, cal):
+    _aprobar(tmp_path, VIAJES_RONDA)
+    tel, correo = Telefonia({"V2": A_TIEMPO, "V3": A_TIEMPO}), Correo()
+    intentos_v1 = []
+
+    def llamar(viaje, variables, env):
+        if viaje["viaje"] == "V1":  # ElevenLabs rechaza solo este número
+            intentos_v1.append(viaje["viaje"])
+            raise ErrorTelefonia("ElevenLabs rechazó la llamada (HTTP 422)")
+        return tel.llamar(viaje, variables, env)
+
+    def un_latido(ahora):
+        ejecutar_latido(ahora, cal, ENV, tmp_path, llamar, tel.esperar_resultado, correo.enviar)
+
+    un_latido(dom(13, 0))
+    assert tel.llamados() == ["V2", "V3"] and len(intentos_v1) == 1
+    assert len(correo.con_asunto("Control de la ronda de las 13:00")) == 1  # V1 no detiene los correos
+    un_latido(dom(13, 5))
+    assert len(intentos_v1) == 1  # 10 minutos entre intentos
+    un_latido(dom(13, 10))
+    un_latido(dom(13, 20))
+    assert len(intentos_v1) == 3
+    v1 = _estados(tmp_path)["V1"]
+    assert v1["estado"] == "monitoreo" and v1["aviso_pendiente"] is True and v1["intentos"] == 0
+    assert v1["historial"][-1]["motivo"] == "No se pudo marcar a este número (falla técnica)"
+    assert any("V1" in f["texto"] and "monitoreo" in f["texto"]
+               for f in almacen.fallas_del_dia(DOMINGO, raiz=tmp_path))
+    un_latido(dom(13, 30))
+    assert len(intentos_v1) == 3  # ya no se le marca
+    assert correo.con_asunto("Fallas de la API") == []  # no es una caída de la API
+    un_latido(dom(19, 30))
+    a_ana = [a for a in correo.con_asunto("caso(s) nuevo(s)") if a.para == ["ana@m.com"]]
+    assert len(a_ana) == 1 and "No se pudo marcar a este número" in a_ana[0].cuerpo
 
 
 def test_una_llamada_buena_reinicia_las_fallas_seguidas(tmp_path, cal):

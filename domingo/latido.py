@@ -14,7 +14,8 @@ reinicia a media llamada, el siguiente latido la resuelve por su conversación. 
      salvo que el domingo esté detenido o se llegue al tope de llamadas.
   5. Una falla de la API (no salió la llamada) no gasta el intento del viaje. Con 3 fallas seguidas
      se suspenden las llamadas 15 minutos (también para los latidos siguientes) y se avisa a control
-     una vez por caída; después se prueba con una sola llamada por latido hasta que una salga.
+     una vez por caída; después se prueba con una sola llamada por latido (de preferencia a un viaje
+     sin fallas) hasta que una salga. Un número que no se pudo marcar 3 veces pasa a monitoreo.
   6. Al terminar cada ronda: avisos de los casos nuevos a monitoreo y correo de control. Desde las
      21:00, lo que no se pudo llamar pasa a monitoreo para que alguien lo siga.
   7. Lunes después de las 7:00: resumen con el Excel, una sola vez.
@@ -40,6 +41,8 @@ MAX_FALLAS_API_SEGUIDAS = 3
 MINUTOS_SUSPENSION_API = 15  # tras 3 fallas seguidas; después, un sondeo por latido
 MINUTOS_MAXIMOS_EN_CURSO = 60  # una conversación que no se puede leer en este tiempo cuenta como sin respuesta
 MOTIVO_SIN_LLAMADA = "No se pudo completar la llamada"
+MAX_FALLAS_API_POR_VIAJE = 3  # un número que no se puede marcar 3 veces pasa a monitoreo
+MOTIVO_NO_MARCA = "No se pudo marcar a este número (falla técnica)"
 VARIABLES_TELEFONIA = ("ELEVENLABS_API_KEY", "ELEVENLABS_AGENT_ID_SEGUIMIENTO", "ELEVENLABS_PHONE_NUMBER_ID")
 VARIABLES_ENV = VARIABLES_TELEFONIA + ("SMTP_HOST", "SMTP_PUERTO", "SMTP_USUARIO", "SMTP_PASSWORD", "CORREO_CONTROL")
 
@@ -79,6 +82,16 @@ def variables_de_llamada(viaje, momento):
         "cita_ya_paso": "sí" if cita_ya_paso(viaje, momento) else "no",
         "hoy_texto": fecha_texto(momento.date().isoformat()),
     }
+
+
+def _pasar_a_monitoreo(estado, momento, motivo):
+    """Pasa a monitoreo un viaje sin llamada que lo resuelva (modifica 'estado'), con una nota en el historial."""
+    estado["estado"] = "monitoreo"
+    estado["aviso_pendiente"] = True
+    nota = {"fecha": momento.isoformat(), "decision": "monitoreo", "conversacion_id": None}
+    nota.update({campo: None for campo in CAMPOS_EXTRAIDOS})
+    nota["motivo"] = motivo
+    estado["historial"].append(nota)
 
 
 def _momento(dia, texto_hora):
@@ -260,7 +273,9 @@ class _Latido:
         while True:
             self.recargar()  # otro proceso pudo haber cambiado algo durante la llamada anterior
             momento = self.ahora()
-            viaje = self.siguiente_por_llamar(momento)
+            api = almacen.leer_estado_api(self.domingo, self.raiz)
+            suspendida = api["suspendida_desde"]
+            viaje = self.siguiente_por_llamar(momento, preferir_sin_fallas=suspendida is not None)
             if viaje is None:
                 return
             detenido = self.detenido()
@@ -278,8 +293,6 @@ class _Latido:
                 self.bloqueados.add(viaje["viaje"])
                 continue
 
-            api = almacen.leer_estado_api(self.domingo, self.raiz)
-            suspendida = api["suspendida_desde"]
             if suspendida is not None:
                 hasta = suspendida + timedelta(minutes=MINUTOS_SUSPENSION_API)
                 if momento < hasta:
@@ -313,15 +326,24 @@ class _Latido:
                 return
             almacen.guardar_estado_api(self.domingo, api, self.raiz)
 
-    def siguiente_por_llamar(self, momento):
-        """El primer viaje de la lista aprobada al que le toca llamada en este momento, o None."""
+    def siguiente_por_llamar(self, momento, preferir_sin_fallas=False):
+        """
+        El primer viaje de la lista aprobada al que le toca llamada en este momento, o None. Para
+        probar la API (preferir_sin_fallas) se escoge antes uno al que no le haya fallado la API, para
+        no confundir un número que no marca con una caída.
+        """
+        candidatos = []
         for viaje in self.viajes:
             if viaje["viaje"] in self.bloqueados or viaje["viaje"] in self.fallaron_api:
                 continue
             ultima = self.ultima_llamada_al_telefono(viaje["telefono"])
             if toca_llamar(viaje, self.estados[viaje["viaje"]], momento, self.cal, ultima):
-                return viaje
-        return None
+                candidatos.append(viaje)
+        if preferir_sin_fallas:
+            for viaje in candidatos:
+                if not self.estados[viaje["viaje"]].get("fallas_api"):
+                    return viaje
+        return candidatos[0] if candidatos else None
 
     def ultima_llamada_al_telefono(self, telefono):
         """
@@ -368,8 +390,15 @@ class _Latido:
             nuevo = copy.deepcopy(estado)
             nuevo["fallas_api"] = estado.get("fallas_api", 0) + 1
             nuevo["ultimo_fallo_api"] = momento
-            self.guardar_viaje(id_viaje, nuevo)
             self.fallaron_api.add(id_viaje)
+            if nuevo["fallas_api"] >= MAX_FALLAS_API_POR_VIAJE:
+                # El problema puede ser de este número (ElevenLabs lo rechaza): que monitoreo lo siga
+                _pasar_a_monitoreo(nuevo, momento, MOTIVO_NO_MARCA)
+                self.guardar_viaje(id_viaje, nuevo)
+                self.falla(f"{texto}; pasa a monitoreo tras {MAX_FALLAS_API_POR_VIAJE} fallas al marcar "
+                           f"({MOTIVO_NO_MARCA.lower()})")
+                return texto
+            self.guardar_viaje(id_viaje, nuevo)
             self.falla(texto + "; no cuenta como intento y se reintenta en 10 minutos o más")
             return texto
 
@@ -404,12 +433,7 @@ class _Latido:
             if estado.get("estado") not in ("pendiente", "sin_respuesta"):
                 continue
             nuevo = copy.deepcopy(estado)
-            nuevo["estado"] = "monitoreo"
-            nuevo["aviso_pendiente"] = True
-            nota = {"fecha": momento.isoformat(), "decision": "monitoreo", "conversacion_id": None}
-            nota.update({campo: None for campo in CAMPOS_EXTRAIDOS})
-            nota["motivo"] = MOTIVO_SIN_LLAMADA
-            nuevo["historial"].append(nota)
+            _pasar_a_monitoreo(nuevo, momento, MOTIVO_SIN_LLAMADA)
             self.guardar_viaje(viaje["viaje"], nuevo)
             self.anota(f"Viaje {viaje['viaje']}: pasa a monitoreo ({MOTIVO_SIN_LLAMADA.lower()} "
                        f"antes de las {self.cal['ventana_llamadas']['hasta']}).")
@@ -437,6 +461,8 @@ class _Latido:
         if viaje["viaje"] in self.bloqueados:
             return False
         estado = self.estados[viaje["viaje"]]
+        if solo_primera and estado.get("estado") == "pendiente" and estado.get("fallas_api"):
+            return False  # ya se intentó y la API falló: no detiene los correos de la ronda de las 13:00
         if estado.get("estado") in ("pendiente", "en_curso"):
             return True
         if solo_primera or estado.get("estado") != "sin_respuesta":
