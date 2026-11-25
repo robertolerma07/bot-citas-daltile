@@ -256,3 +256,9 @@ Rama `domingo-mvp`, juntada con `master` el 2026-11-25 tras la revisión final (
 - Conversación `conv_9601m89wh46wfby84ehzee5a8615` (49 s, 685 créditos): no confirmó la hora insegura, dio el WhatsApp de Monitoreo y **colgó sola con `end_call`**; decisión: monitoreo, correcta.
 - **Teléfono de Monitoreo:** ahora se dice en grupos 2-2-3-3 (los dos primeros pares y los últimos 6 en dos grupos de 3): "ochenta y uno... ochenta y tres... cero cero cuatro... quinientos" (`lib/formato_voz.telefono_por_grupos`). Al repetirlo, los mismos grupos dígito por dígito. El agente de avisos de cita no cambia.
 - **Despedida:** el "Gracias." sonaba acartonado; ahora es "¡Muchas gracias! … ¡Que tenga muy buen día!" con la instrucción de decirlo con energía y calidez.
+
+### 2026-11-25 — Cuarta prueba: caso a tiempo
+- Conversación `conv_0901m89zg9naf3xant5zfb35by41` (47 s, 950 créditos): "voy a estar ahí a las ocho" → confirmó "el lunes treinta de noviembre a las ocho de la mañana" → "sí"; extracción `llega_antes_de_la_cita = sí`, `hora_estimada = 08:00`, `fecha_estimada = 2026-11-30`; decisión del bot: **a_tiempo** (igual al límite), correcta.
+- Teléfono de Monitoreo en 2-2-3-3 y "¡Muchas gracias!" se escucharon bien.
+- Detalle menor: usó `end_call` al terminar el cierre, pero un "mhm" del operador justo al final la hizo repetir "¡Que tenga muy buen día!" antes de colgar (la llamada igual terminó a los 47 s). Se deja así por ahora; si molesta, se acorta el cierre.
+- Créditos: 6,681 de 10,000 usados. Falta probar "ya entregué" (cita pasada).
