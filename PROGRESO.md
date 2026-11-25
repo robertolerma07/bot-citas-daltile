@@ -251,3 +251,8 @@ Rama `domingo-mvp`, juntada con `master` el 2026-11-25 tras la revisión final (
 - Falla: intentó confirmar una hora insegura y la llamada llegó al tope de 60 s antes del cierre, así que el operador no oyó el WhatsApp de Monitoreo (tampoco se pudo comprobar que cuelgue sola).
 - Ajustes: un rango de horas o "no estoy seguro" cuentan como respuesta vaga (no se confirman; se va directo al cierre), en el prompt y en la extracción. **Decisión de Roberto:** la duración máxima sube de 60 a 90 s como red de seguridad; la meta sigue siendo ~30 s. Costo: solo las llamadas de más de 60 s cobran un minuto más en Twilio (~USD 0.05) y unos 450 créditos más.
 - Créditos de ElevenLabs: 5,996 de 10,000 usados. Antes del domingo de ensayo hay que subir a Starter.
+
+### 2026-11-25 — Tercera prueba y ajustes de voz (decisiones de Roberto)
+- Conversación `conv_9601m89wh46wfby84ehzee5a8615` (49 s, 685 créditos): no confirmó la hora insegura, dio el WhatsApp de Monitoreo y **colgó sola con `end_call`**; decisión: monitoreo, correcta.
+- **Teléfono de Monitoreo:** ahora se dice en grupos 2-2-3-3 (los dos primeros pares y los últimos 6 en dos grupos de 3): "ochenta y uno... ochenta y tres... cero cero cuatro... quinientos" (`lib/formato_voz.telefono_por_grupos`). Al repetirlo, los mismos grupos dígito por dígito. El agente de avisos de cita no cambia.
+- **Despedida:** el "Gracias." sonaba acartonado; ahora es "¡Muchas gracias! … ¡Que tenga muy buen día!" con la instrucción de decirlo con energía y calidez.

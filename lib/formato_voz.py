@@ -222,6 +222,29 @@ def telefono_pares(telefono):
     return "... ".join(pares)
 
 
+def _grupo_hablado(grupo):
+    """Un grupo de 2 o 3 dígitos en palabras; los ceros del principio se dicen uno por uno ('004' -> 'cero cero cuatro')."""
+    ceros = len(grupo) - len(grupo.lstrip("0"))
+    resto = grupo[ceros:]
+    palabras = ["cero"] * ceros
+    if resto:
+        palabras.append(numero_largo_a_texto(int(resto)))
+    return " ".join(palabras)
+
+
+def telefono_por_grupos(telefono, digito_por_digito=False):
+    """
+    Teléfono en grupos 2-2-3-3, como lo pidió Roberto (2026-11-25):
+    '+528183004500' -> 'ochenta y uno... ochenta y tres... cero cero cuatro... quinientos'.
+    Con digito_por_digito=True, los mismos grupos dígito por dígito (para cuando piden repetirlo).
+    """
+    d = _diez_digitos(telefono)
+    grupos = [d[0:2], d[2:4], d[4:7], d[7:10]]
+    if digito_por_digito:
+        return "... ".join(", ".join(UNIDADES[int(c)] for c in g) for g in grupos)
+    return "... ".join(_grupo_hablado(g) for g in grupos)
+
+
 def telefono_digitos(telefono):
     """Teléfono dígito por dígito, en grupos 2-4-4, para cuando piden repetir."""
     d = _diez_digitos(telefono)

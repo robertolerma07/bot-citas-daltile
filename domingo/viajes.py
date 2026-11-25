@@ -12,7 +12,7 @@ from pathlib import Path
 from openpyxl import load_workbook
 
 from domingo.calendario import hora_de
-from lib.formato_voz import fecha_texto, hora_texto, telefono_digitos, telefono_pares
+from lib.formato_voz import fecha_texto, hora_texto, telefono_por_grupos
 from lib.seguridad import PATRON_TELEFONO_MX, RUTA_LISTA_BLANCA, ZONA_CDMX, cargar_lista_blanca
 from validar_citas import ABREVIATURAS, PATRON_FECHA, PATRON_HORA, revisar_telefono
 
@@ -239,6 +239,7 @@ def variables_de_voz_viaje(viaje):
         "fecha_cita_texto": fecha_texto(viaje["fecha_cita"]),
         "tipo_cita": viaje["tipo_cita"],
         "limite_texto": re.sub(r"^a ", "", hora_texto(viaje["limite"])),  # "a las ocho..." -> "las ocho..."
-        "tel_monitoreo_texto": telefono_pares(viaje["telefono_monitoreo"]),
-        "tel_monitoreo_digitos": telefono_digitos(viaje["telefono_monitoreo"]),
+        # 2-2-3-3, como lo pidió Roberto (2026-11-25): "ochenta y uno... ochenta y tres... cero cero cuatro... quinientos"
+        "tel_monitoreo_texto": telefono_por_grupos(viaje["telefono_monitoreo"]),
+        "tel_monitoreo_digitos": telefono_por_grupos(viaje["telefono_monitoreo"], digito_por_digito=True),
     }

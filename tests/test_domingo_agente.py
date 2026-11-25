@@ -165,3 +165,12 @@ def test_no_confirma_rangos_ni_horas_inseguras():
     paso_7 = prompt[prompt.index("7. Confirma una sola vez"):prompt.index("## Cuando la cita ya pasó")]
     assert "dio un rango" in paso_7
     assert "no confirmes nada" in paso_7
+
+
+def test_gracias_con_energia():
+    # Roberto (2026-11-25): el "Gracias." del cierre sonaba acartonado
+    prompt = leer_prompt(SEGUIMIENTO)
+    cierre = prompt[prompt.index("## Cierre"):prompt.index("# Respuestas vagas")]
+    assert '"¡Muchas gracias! Si algo cambia' in cierre
+    assert "con energía" in cierre
+    assert '"Gracias. Si algo cambia' not in prompt
