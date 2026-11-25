@@ -1,0 +1,12 @@
+{# Formulario para subir el Excel; lo incluyen el inicio y la revisión. #}
+{% if para_aprobar %}
+<form method="post" action="/subir" enctype="multipart/form-data">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <label for="archivo">Excel de viajes del domingo {{ para_aprobar }} (.xlsx, máximo 2 MB)</label>
+  <input id="archivo" type="file" name="archivo" accept=".xlsx" required>
+  <button type="submit">Subir y revisar</button>
+</form>
+<p class="chico">Se puede subir y aprobar hasta el domingo a las {{ aprobar_hasta }}. Una aprobación nueva reemplaza a la anterior.</p>
+{% else %}
+<div class="aviso">Las aprobaciones de hoy cerraron a las {{ aprobar_hasta }}. Ya no se puede subir ni aprobar una lista para este domingo.</div>
+{% endif %}

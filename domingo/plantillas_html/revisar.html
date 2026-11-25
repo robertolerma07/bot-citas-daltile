@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block titulo %}Revisar lista · Sofía{% endblock %}
+{% block contenido %}
+<section>
+  <h1>Revisión de la lista</h1>
+  {% if errores %}
+  <div class="error">
+    <strong>La lista tiene errores y no se puede aprobar. Corrígelos en el Excel y súbelo de nuevo.</strong>
+    <ul>{% for e in errores %}<li>{{ e }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+  {% if advertencias %}
+  <div class="aviso">
+    <strong>Advertencias (revísalas; no impiden aprobar):</strong>
+    <ul>{% for a in advertencias %}<li>{{ a }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+
+  {% if puede_aprobar %}
+  <h2>Llamadas que se harán el domingo {{ domingo }}</h2>
+  <div class="tabla">
+  <table>
+    <tr><th>Viaje</th><th>Operador</th><th>Teléfono</th><th>Cita</th><th>Monitoreo</th></tr>
+    {% for f in filas %}
+    <tr><td>{{ f.viaje }}</td><td>{{ f.operador }}</td><td>{{ f.telefono }}</td><td>{{ f.cita }}</td><td>{{ f.monitoreo }}</td></tr>
+    {% endfor %}
+  </table>
+  </div>
+  {% if vigente %}
+  <div class="aviso">Ya hay una aprobación de {{ vigente.quien }} ({{ vigente.cuando }}, {{ vigente.total }} llamadas). Esta la va a reemplazar.</div>
+  {% endif %}
+  <form method="post" action="/aprobar">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <label for="nombre">Tu nombre (quién aprueba)</label>
+    <input id="nombre" type="text" name="nombre" maxlength="60" autocomplete="name" required>
+    <button type="submit">Aprobar {{ filas|length }} llamada{{ '' if filas|length == 1 else 's' }}</button>
+  </form>
+  {% endif %}
+</section>
+<section>
+  <h2>{{ 'Subir otra lista' if para_aprobar else 'Aprobaciones' }}</h2>
+  {% include "subir.html" %}
+  <p><a href="/">Volver al inicio</a></p>
+</section>
+{% endblock %}
