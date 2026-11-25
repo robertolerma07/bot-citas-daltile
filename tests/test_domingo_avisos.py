@@ -200,3 +200,25 @@ def test_ninguna_key_en_el_cuerpo(tmp_path, capsys):
     assert CLAVE not in capsys.readouterr().out
     for m in SmtpFalso.enviados:
         assert CLAVE not in m.as_string()
+
+
+def test_casos_sin_correo_de_monitoreo_van_a_control(tmp_path):
+    viajes, estados = _escenario()
+    viajes.append(_viaje(6, ""))
+    estados["V6"] = _estado("monitoreo", 1, [_entrada("monitoreo")], True)
+    lista = avisos.avisos_de_casos(viajes, estados, CONTROL)
+    sin = [a for a in lista if a.para == [CONTROL]]
+    assert len(sin) == 1 and "sin persona de monitoreo" in sin[0].asunto.lower()
+    assert "V6" in sin[0].cuerpo and "V1" not in sin[0].cuerpo
+    assert all("V6" not in a.cuerpo for a in lista if a.para != [CONTROL])
+    resumen = avisos.avisos_de_resumen(DOMINGO, viajes, estados, CONTROL, tmp_path / "r.xlsx")
+    control = [a for a in resumen if a.para == [CONTROL]]
+    assert len(control) == 1 and "V6" in control[0].cuerpo
+    assert "sin persona de monitoreo" in control[0].cuerpo.lower()
+    assert all("V6" not in a.cuerpo for a in resumen if a.para != [CONTROL])
+
+
+def test_enviar_destinatario_invalido_regresa_false(capsys):
+    a = Aviso(["ana@m.com\r\nBcc: x@y.com"], [], "x", "y")
+    assert avisos.enviar(a, ENV, smtp=SmtpFalso) is False
+    assert SmtpFalso.enviados == [] and CLAVE not in capsys.readouterr().out

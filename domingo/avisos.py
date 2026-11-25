@@ -56,14 +56,14 @@ def enviar(aviso, env, canal="correo", smtp=smtplib.SMTP):
         print("Aviso no enviado: no tiene destinatarios.")
         return False
 
-    mensaje = EmailMessage()
-    mensaje["From"] = usuario
-    mensaje["To"] = ", ".join(aviso.para)
-    if aviso.copia:
-        mensaje["Cc"] = ", ".join(aviso.copia)
-    mensaje["Subject"] = aviso.asunto
-    mensaje.set_content(aviso.cuerpo)
     try:
+        mensaje = EmailMessage()
+        mensaje["From"] = usuario
+        mensaje["To"] = ", ".join(aviso.para)
+        if aviso.copia:
+            mensaje["Cc"] = ", ".join(aviso.copia)
+        mensaje["Subject"] = aviso.asunto
+        mensaje.set_content(aviso.cuerpo)
         if aviso.adjunto is not None:
             ruta = Path(aviso.adjunto)
             mensaje.add_attachment(
@@ -73,7 +73,7 @@ def enviar(aviso, env, canal="correo", smtp=smtplib.SMTP):
             servidor.starttls()
             servidor.login(usuario, clave)
             servidor.send_message(mensaje)
-    except (smtplib.SMTPException, OSError) as e:
+    except (smtplib.SMTPException, OSError, ValueError, TypeError) as e:
         # Solo el tipo de error: el texto de la excepción podría traer datos de la cuenta.
         print(f"Aviso no enviado ({type(e).__name__}): {aviso.asunto}")
         return False
@@ -126,11 +126,11 @@ def _bloque_caso(viaje, estado):
 
 
 def _por_persona(viajes):
-    """Viajes agrupados por correo de monitoreo, en el orden de aparición."""
+    """Viajes agrupados por correo de monitoreo, en el orden de aparición (la clave "" son los que no tienen)."""
     grupos = {}
     for v in viajes:
         grupos.setdefault(v.get("correo_monitoreo", ""), []).append(v)
-    return {correo: lista for correo, lista in grupos.items() if correo}
+    return grupos
 
 
 def _copia(correo_control):
@@ -145,6 +145,14 @@ def avisos_de_casos(viajes, estados, correo_control, domingo=None):
     for correo, suyos in _por_persona(viajes).items():
         casos = [v for v in suyos if _estado_de(estados, v).get("aviso_pendiente")]
         if not casos:
+            continue
+        if not correo:  # sin persona de monitoreo: no se pierde, va a control
+            bloques = [_bloque_caso(v, _estado_de(estados, v)) for v in casos]
+            cuerpo = ("Estos casos pasan a monitoreo pero el viaje no trae correo de monitoreo:"
+                      + chr(10) * 2 + (chr(10) * 2).join(bloques) + chr(10))
+            lista.append(Aviso(_copia(correo_control), [],
+                               f"{PREFIJO} {domingo + ' ' if domingo else ''}Casos sin persona de monitoreo",
+                               cuerpo))
             continue
         bloques = [_bloque_caso(v, _estado_de(estados, v)) for v in casos]
         cuerpo = (f"Casos nuevos que pasan a monitoreo ({len(casos)}):\n\n" + "\n\n".join(bloques) + "\n")
@@ -213,12 +221,25 @@ def avisos_de_resumen(domingo, viajes, estados, correo_control, ruta_excel):
     """Resumen del lunes: uno por persona de monitoreo con sus viajes y uno a control con todos y el Excel."""
     lista = []
     for correo, suyos in _por_persona(viajes).items():
+        if not correo:
+            continue
         lista.append(Aviso([correo], _copia(correo_control), _asunto(domingo, f"Resumen de {len(suyos)} viaje(s)"),
                            _cuerpo_resumen(domingo, suyos, estados)))
     escribir_excel_resumen(viajes, estados, ruta_excel)
     lista.append(Aviso(_copia(correo_control), [], _asunto(domingo, f"Resumen de {len(viajes)} viaje(s)"),
-                       _cuerpo_resumen(domingo, viajes, estados), adjunto=Path(ruta_excel)))
+                       _cuerpo_resumen(domingo, viajes, estados) + _sin_persona(viajes, estados),
+                       adjunto=Path(ruta_excel)))
     return lista
+
+
+def _sin_persona(viajes, estados):
+    """Sección para control con los viajes sin correo de monitoreo (nadie más los recibe)."""
+    sueltos = [v for v in viajes if not v.get("correo_monitoreo")]
+    if not sueltos:
+        return ""
+    lineas = ["", "Viajes sin persona de monitoreo (no se mandó a nadie más):"]
+    lineas += [f"  {v['viaje']} - {ETIQUETAS.get(_estado_de(estados, v).get('estado'))}" for v in sueltos]
+    return chr(10).join(lineas) + chr(10)
 
 
 def _cuerpo_resumen(domingo, viajes, estados):
