@@ -1,0 +1,202 @@
+"""Pruebas de los avisos por correo y del Excel del resumen del domingo (SMTP falso, sin red)."""
+
+import smtplib
+from datetime import datetime
+
+import openpyxl
+import pytest
+
+from domingo import avisos
+from domingo.avisos import Aviso
+from lib.seguridad import ZONA_CDMX
+
+DOMINGO = "2026-11-29"
+CONTROL = "roberto@ejemplo.com"
+CLAVE = "clave-secreta-smtp-1234"
+ENV = {"SMTP_HOST": "smtp.ejemplo.com", "SMTP_PUERTO": "587", "SMTP_USUARIO": "bot@ejemplo.com",
+       "SMTP_PASSWORD": CLAVE}
+
+
+def _viaje(n, correo, tipo="Hora", hora="08:00"):
+    return {"viaje": f"V{n}", "linea": "Linea Norte", "operador": f"Operador {n}", "telefono": f"+52555000000{n}",
+            "cliente": f"Cliente {n}", "destino": "Monterrey", "fecha_cita": "2026-11-30", "tipo_cita": tipo,
+            "hora": hora, "correo_monitoreo": correo, "telefono_monitoreo": "+525550001111",
+            "limite": hora if tipo == "Hora" else "16:00", "_fila": n + 1}
+
+
+def _entrada(decision, dicha="a las 10", motivo="tráfico", conv="conv_abc"):
+    return {"fecha": "2026-11-29T13:00:00-06:00", "decision": decision, "conversacion_id": conv,
+            "hablo_con_operador": decision != "sin_respuesta", "llega_antes_de_la_cita": "no",
+            "entrega_realizada": "no aplica", "hora_estimada_dicha": dicha, "hora_estimada": "10:00",
+            "fecha_estimada": "2026-11-30", "motivo": motivo}
+
+
+def _estado(estado, intentos=1, historial=None, aviso=False):
+    return {"estado": estado, "intentos": intentos, "ultimo_intento": datetime(2026, 11, 29, 13, 0, tzinfo=ZONA_CDMX),
+            "en_curso": None, "historial": historial or [], "aviso_pendiente": aviso, "fallas_api": 0}
+
+
+def _escenario():
+    viajes = [_viaje(1, "ana@m.com"), _viaje(2, "ana@m.com"), _viaje(3, "luis@m.com", tipo="Día"),
+              _viaje(4, "luis@m.com")]
+    estados = {
+        "V1": _estado("monitoreo", 1, [_entrada("monitoreo")], True),
+        "V2": _estado("monitoreo", 3, [_entrada("sin_respuesta", None, None)] * 3, True),
+        "V3": _estado("monitoreo", 1, [_entrada("monitoreo", "como a las 5", "falla", "conv_xyz")], True),
+        "V4": _estado("a_tiempo", 1, [_entrada("a_tiempo", "antes de las 8", None)]),
+        "VIEJO": _estado("monitoreo", 1, [_entrada("monitoreo")], True),  # viaje ya no aprobado
+    }
+    return viajes, estados
+
+
+class SmtpFalso:
+    enviados = []
+    conexiones = []
+    falla = None
+
+    def __init__(self, host, puerto, timeout=None):
+        if SmtpFalso.falla:
+            raise SmtpFalso.falla
+        SmtpFalso.conexiones.append((host, puerto, timeout))
+        self.pasos = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def starttls(self, *a, **k):
+        self.pasos.append("starttls")
+
+    def login(self, usuario, clave):
+        self.pasos.append(("login", usuario, clave))
+
+    def send_message(self, mensaje, *a, **k):
+        assert self.pasos[0] == "starttls"
+        SmtpFalso.enviados.append(mensaje)
+
+
+@pytest.fixture(autouse=True)
+def _limpia():
+    SmtpFalso.enviados, SmtpFalso.conexiones, SmtpFalso.falla = [], [], None
+
+
+def test_avisos_de_casos_por_persona():
+    viajes, estados = _escenario()
+    lista = avisos.avisos_de_casos(viajes, estados, CONTROL)
+    assert len(lista) == 2
+    por_persona = {a.para[0]: a for a in lista}
+    assert set(por_persona) == {"ana@m.com", "luis@m.com"}
+    ana, luis = por_persona["ana@m.com"], por_persona["luis@m.com"]
+    assert ana.copia == [CONTROL] and luis.copia == [CONTROL]
+    assert "V1" in ana.cuerpo and "V2" in ana.cuerpo and "V3" not in ana.cuerpo
+    assert "V3" in luis.cuerpo and "V1" not in luis.cuerpo
+    assert "V4" not in ana.cuerpo + luis.cuerpo  # a_tiempo no aparece
+    assert "VIEJO" not in ana.cuerpo + luis.cuerpo
+    assert "[Sofía domingo]" in ana.asunto
+    assert "a las 08:00" in ana.cuerpo and "antes de las 16:00" in luis.cuerpo
+    assert "como a las 5" in luis.cuerpo and "falla" in luis.cuerpo and "conv_xyz" in luis.cuerpo
+    assert "No contestó en 3 llamadas" in ana.cuerpo
+    assert "+525550000001" in ana.cuerpo
+
+
+def test_avisos_de_casos_sin_casos_no_manda():
+    viajes = [_viaje(4, "luis@m.com")]
+    assert avisos.avisos_de_casos(viajes, {"V4": _estado("a_tiempo")}, CONTROL) == []
+
+
+def test_aviso_de_control_sin_casos():
+    viajes = [_viaje(4, "luis@m.com"), _viaje(5, "luis@m.com")]
+    estados = {"V4": _estado("a_tiempo", 1, [_entrada("a_tiempo")]), "V5": _estado("pendiente", 0)}
+    a = avisos.aviso_de_control(DOMINGO, "13:00", viajes, estados, CONTROL, [])
+    assert a.para == [CONTROL] and a.asunto.startswith("[Sofía domingo] " + DOMINGO)
+    for texto in ("llamadas: 1", "a tiempo: 1", "monitoreo: 0", "pendientes: 1"):
+        assert texto in a.cuerpo
+    assert "fallas" not in a.cuerpo.lower()
+
+
+def test_aviso_de_control_con_fallas_y_conteos():
+    viajes, estados = _escenario()
+    a = avisos.aviso_de_control(DOMINGO, "19:30", viajes, estados, CONTROL, ["no salió el correo a ana"])
+    assert "llamadas: 6" in a.cuerpo and "monitoreo: 3" in a.cuerpo and "a tiempo: 1" in a.cuerpo
+    assert "entregado: 0" in a.cuerpo and "no salió el correo a ana" in a.cuerpo
+
+
+def test_avisos_de_aprobacion_sin_lista_detenido_y_fallas():
+    viajes, _ = _escenario()
+    apr = {"quien": "Maria", "cuando": datetime(2026, 11, 29, 10, 0, tzinfo=ZONA_CDMX), "viajes": viajes}
+    a = avisos.aviso_de_aprobacion(DOMINGO, apr, CONTROL)
+    assert "Maria" in a.cuerpo and "V1" in a.cuerpo and "4" in a.cuerpo and a.para == [CONTROL]
+    s = avisos.aviso_sin_lista(DOMINGO, CONTROL)
+    assert s.para == [CONTROL] and DOMINGO in s.asunto
+    d = avisos.aviso_detenido(DOMINGO, "Pedro", datetime(2026, 11, 29, 13, 5, tzinfo=ZONA_CDMX), CONTROL)
+    assert "Pedro" in d.cuerpo and "13:05" in d.cuerpo
+    f = avisos.aviso_fallas_api(DOMINGO, ["ElevenLabs 500"], CONTROL)
+    assert "ElevenLabs 500" in f.cuerpo
+
+
+def test_resumen_y_excel(tmp_path):
+    viajes, estados = _escenario()
+    ruta = tmp_path / "resumen.xlsx"
+    lista = avisos.avisos_de_resumen(DOMINGO, viajes, estados, CONTROL, ruta)
+    assert ruta.exists()
+    libro = openpyxl.load_workbook(ruta)
+    assert libro.sheetnames == ["Viajes", "Historial"]
+    assert libro["Viajes"].max_row == 1 + 4
+    assert libro["Historial"].max_row == 1 + 1 + 3 + 1 + 1  # V1, V2 (3), V3, V4
+    assert len(lista) == 3
+    control = [a for a in lista if a.para == [CONTROL]][0]
+    assert control.adjunto == ruta
+    assert all(a.adjunto is None for a in lista if a.para != [CONTROL])
+    ana = [a for a in lista if a.para == ["ana@m.com"]][0]
+    assert "V1" in ana.cuerpo and "V4" not in ana.cuerpo
+
+
+def test_enviar_ok(tmp_path):
+    adj = tmp_path / "r.xlsx"
+    adj.write_bytes(b"datos")
+    a = Aviso(para=["ana@m.com"], copia=[CONTROL], asunto="[Sofía domingo] x", cuerpo="hola", adjunto=adj)
+    assert avisos.enviar(a, ENV, smtp=SmtpFalso) is True
+    assert SmtpFalso.conexiones == [("smtp.ejemplo.com", 587, 30)]
+    m = SmtpFalso.enviados[0]
+    assert m["From"] == "bot@ejemplo.com" and m["To"] == "ana@m.com" and m["Cc"] == CONTROL
+    assert any(p.get_filename() == "r.xlsx" for p in m.iter_attachments())
+
+
+def test_enviar_falla_sin_traza(capsys):
+    SmtpFalso.falla = OSError("sin red")
+    assert avisos.enviar(Aviso(["a@m.com"], [], "x", "y"), ENV, smtp=SmtpFalso) is False
+    SmtpFalso.falla = smtplib.SMTPAuthenticationError(535, b"mal")
+    assert avisos.enviar(Aviso(["a@m.com"], [], "x", "y"), ENV, smtp=SmtpFalso) is False
+    assert CLAVE not in capsys.readouterr().out
+
+
+def test_enviar_sin_config():
+    llamadas = []
+
+    def smtp(*a, **k):
+        llamadas.append(a)
+
+    env = {"SMTP_HOST": "x"}
+    assert avisos.enviar(Aviso(["a@m.com"], [], "x", "y"), env, smtp=smtp) is False
+    assert llamadas == []
+
+
+def test_canal_no_implementado():
+    with pytest.raises(NotImplementedError):
+        avisos.enviar(Aviso(["a@m.com"], [], "x", "y"), ENV, canal="whatsapp", smtp=SmtpFalso)
+
+
+def test_ninguna_key_en_el_cuerpo(tmp_path, capsys):
+    viajes, estados = _escenario()
+    env = dict(ENV)
+    todos = avisos.avisos_de_casos(viajes, estados, CONTROL)
+    todos.append(avisos.aviso_de_control(DOMINGO, "13:00", viajes, estados, CONTROL, []))
+    todos += avisos.avisos_de_resumen(DOMINGO, viajes, estados, CONTROL, tmp_path / "r.xlsx")
+    for a in todos:
+        assert env["SMTP_PASSWORD"] not in a.asunto + a.cuerpo
+        avisos.enviar(a, env, smtp=SmtpFalso)
+    assert CLAVE not in capsys.readouterr().out
+    for m in SmtpFalso.enviados:
+        assert CLAVE not in m.as_string()
