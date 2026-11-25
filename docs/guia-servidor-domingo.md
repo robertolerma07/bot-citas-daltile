@@ -65,7 +65,14 @@ en bloques de código: se copian y se pegan tal cual. Nunca pegues contraseñas 
 1. Entra a Lightsail con tu sesión de AWS: https://lightsail.aws.amazon.com
 2. **Create instance**. Región: la misma de `srm-piloto` o la más cercana a México.
 3. Plataforma **Linux/Unix**, blueprint **OS Only → Ubuntu 24.04 LTS**.
-4. Plan: el más barato. **Cuesta unos USD 5 al mes; confirma el precio vigente en la pantalla.**
+4. Plan: el más barato **que tenga IPv4 pública (dual-stack, no "solo IPv6")** y **al menos 1 GB de RAM**. Con solo IPv6 no funcionan GitHub por SSH, la IP fija ni sslip.io. **Cuesta unos USD 5 a 7 al mes; confirma el precio vigente en la pantalla.** Si de todos modos eliges 512 MB, crea memoria extra con estos comandos en la terminal del servidor, una sola vez (sin ella, la instalación de las dependencias puede fallar por falta de memoria):
+   ```
+   sudo fallocate -l 1G /swapfile
+   sudo chmod 600 /swapfile
+   sudo mkswap /swapfile
+   sudo swapon /swapfile
+   echo "/swapfile none swap sw 0 0" | sudo tee -a /etc/fstab
+   ```
 5. Nombre de la instancia: `bot-domingo`. **No uses ni toques `srm-piloto`.**
 6. **Create instance** y espera a que diga *Running*.
 
@@ -102,10 +109,9 @@ código pero nunca cambiarlo).
 ```
 sudo -u sofia bash -c 'ssh-keyscan -t ed25519 github.com >> /home/sofia/.ssh/known_hosts'
 sudo -u sofia git clone --branch domingo-mvp git@github.com:robertolerma07/bot-citas-daltile.git /home/sofia/bot-citas-daltile
-cd /home/sofia/bot-citas-daltile
-sudo bash despliegue/instalar.sh
+sudo bash /home/sofia/bot-citas-daltile/despliegue/instalar.sh
 ```
-- `domingo-mvp` es la rama de trabajo; cuando se junte con `master`, usa `sudo RAMA=master bash despliegue/instalar.sh`.
+- `domingo-mvp` es la rama de trabajo; cuando se junte con `master`, usa `sudo RAMA=master bash /home/sofia/bot-citas-daltile/despliegue/instalar.sh`.
 - El instalador pone Python, las dependencias, Caddy (el que da el candadito), el servicio de la página y el latido cada
   5 minutos. La hora del servidor no importa: el bot usa siempre la hora de Ciudad de México.
 - La **primera vez se detiene** con un mensaje que dice qué falta (`.env` y la lista de celulares). Es normal: sigue con
@@ -151,16 +157,14 @@ ensayo.
 
 ### C5. Terminar la instalación y revisar
 ```
-cd /home/sofia/bot-citas-daltile
-sudo bash despliegue/instalar.sh
+sudo bash /home/sofia/bot-citas-daltile/despliegue/instalar.sh
 ```
 Al final dice `LISTO. La pagina queda en: https://...sslip.io`. Abre esa dirección en tu navegador: debe pedir la
 contraseña. (Si no abre al instante, espera uno o dos minutos: Caddy está sacando el candadito.)
 
 Revisa las conexiones sin llamar a nadie:
 ```
-cd /home/sofia/bot-citas-daltile
-sudo -u sofia .venv/bin/python verificar_conexion.py
+sudo -u sofia /home/sofia/bot-citas-daltile/.venv/bin/python /home/sofia/bot-citas-daltile/verificar_conexion.py
 sudo systemctl status bot-domingo-pagina --no-pager
 sudo -u sofia crontab -l
 ```
@@ -170,8 +174,7 @@ está habilitado.
 ## Parte D. Actualizar el código más adelante
 Cuando haya cambios nuevos en GitHub, en la terminal del servidor:
 ```
-cd /home/sofia/bot-citas-daltile
-sudo bash despliegue/instalar.sh
+sudo bash /home/sofia/bot-citas-daltile/despliegue/instalar.sh
 ```
 Baja la rama, actualiza dependencias y reinicia la página. Tu `.env` y tus datos no se tocan.
 
@@ -182,5 +185,7 @@ Baja la rama, actualiza dependencias y reinicia la página. Tu `.env` y tus dato
 - **El latido no hace nada:** es normal fuera de domingo. Revisa `resultados/domingo/latido.log` y
   `resultados/domingo/cron.log`.
 - **El instalador dice que falta algo:** lee el mensaje; dice el archivo exacto.
-- **Quieres dejar de gastar:** en Lightsail puedes detener (*Stop*) la instancia; la IP estática solo es gratis mientras
-  está conectada a una instancia.
+- **Quieres dejar de gastar:** detener (*Stop*) la instancia **no** detiene el cobro; Lightsail sigue cobrando una
+  instancia detenida. El cobro solo termina cuando **borras** la instancia (si quieres conservarla, antes crea una
+  *snapshot*, que también tiene un costo pequeño) y **liberas la IP estática**: una IP estática que no está conectada a
+  una instancia también se cobra. Nunca borres `srm-piloto`.

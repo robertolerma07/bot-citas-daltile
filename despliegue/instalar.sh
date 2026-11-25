@@ -16,6 +16,9 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
+# Evita correr desde una carpeta que el usuario sofia no puede leer
+cd /
+
 echo "== 1/8 Paquetes del sistema"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
