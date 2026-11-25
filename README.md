@@ -1,4 +1,11 @@
-# Bot de voz "Sofía" — avisos de citas de entrega (prueba de concepto)
+# Bot de voz "Sofía" — seguimiento de entregas por teléfono
+
+> **¿Vas llegando al proyecto?** Empieza por **[docs/ENTREGA.md](docs/ENTREGA.md)**: qué es, diagramas, cómo se
+> trabaja, estado actual y lo que sigue. Si usas GitHub Copilot, sus reglas están en
+> [.github/copilot-instructions.md](.github/copilot-instructions.md).
+>
+> El producto actual es el **seguimiento de domingo** (`domingo/` y `agente_seguimiento/`, sección de abajo). Lo que
+> sigue a continuación sobre avisos de cita (`agente/`) es la prueba de concepto original.
 
 Prueba interna de Daltile México. Un agente de voz de **ElevenLabs** llama por **Twilio** para avisar una cita de entrega y capturar la confirmación. **Solo se llama a celulares del equipo** que estén en la lista blanca. Todos los datos de citas son ficticios.
 

@@ -269,3 +269,9 @@ Rama `domingo-mvp`, juntada con `master` el 2026-11-25 tras la revisión final (
 - Corrección: juntó "¿Qué pasó? ¿Y a qué hora calcula llegar?" en un turno. El paso 9 ahora pide preguntar el motivo, esperar la respuesta y después la hora (sin volverla a preguntar si ya la dio). No se volvió a probar en el navegador para ahorrar créditos; se revisa en el ensayo.
 - Una llamada anterior (`conv_1601…`, 22 s, 352 créditos) se cortó al inicio sin datos; decisión sin_respuesta, como debe.
 - El agente quedó otra vez con el ejemplo normal (cita por venir). Créditos: unos 8,100 de 10,000 usados.
+
+### 2026-11-25 — Entrega del proyecto a una colaboradora
+- Roberto delega el proyecto; el seguimiento será con GitHub Copilot.
+- `docs/ENTREGA.md`: punto de entrada con 7 diagramas (panorama, domingo hora por hora, flujo de la llamada, decisión, estados del viaje, ciclo de un cambio, lo que sigue), mapa del repo, reglas de la casa, estado, pendientes, accesos a traspasar y glosario.
+- `.github/copilot-instructions.md`: reglas para Copilot (español, seguridad, no gastar sin pedirlo, no tocar `srm-piloto`, decisión en `reglas.py`, flujo de pruebas y commits).
+- `README.md` apunta a la guía de entrega.
