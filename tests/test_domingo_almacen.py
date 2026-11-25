@@ -136,3 +136,13 @@ def test_candado_reciente_bloquea(tmp_path):
         with almacen.candado(raiz=tmp_path):
             pass
     assert (tmp_path / "latido.lock").exists()
+
+
+def test_fallas_del_dia_sin_repetir(tmp_path):
+    assert almacen.fallas_del_dia(DOMINGO, raiz=tmp_path) == []
+    assert almacen.anotar_falla(DOMINGO, "Viaje V1: fuera de la lista blanca", AHORA, raiz=tmp_path)
+    assert not almacen.anotar_falla(DOMINGO, "Viaje V1: fuera de la lista blanca", AHORA, raiz=tmp_path)
+    assert almacen.anotar_falla(DOMINGO, "Falta CORREO_CONTROL", AHORA, raiz=tmp_path)
+    fallas = almacen.fallas_del_dia(DOMINGO, raiz=tmp_path)
+    assert [f["texto"] for f in fallas] == ["Viaje V1: fuera de la lista blanca", "Falta CORREO_CONTROL"]
+    assert datetime.fromisoformat(fallas[0]["cuando"]) == AHORA

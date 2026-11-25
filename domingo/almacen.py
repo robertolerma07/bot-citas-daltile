@@ -135,6 +135,27 @@ def ya_hecho(domingo, clave, raiz=RAIZ_DOMINGO):
     return clave in _leer_json(carpeta(domingo, raiz) / "hechos.json", {})
 
 
+# --- fallas del día ----------------------------------------------------------------------------
+
+def anotar_falla(domingo, texto, ahora, raiz=RAIZ_DOMINGO):
+    """
+    Anota una falla del día (va en el correo de control y en la página). Una falla con el mismo
+    texto no se repite. Regresa True si era nueva.
+    """
+    ruta = carpeta(domingo, raiz) / "fallas.json"
+    fallas = _leer_json(ruta, [])
+    if any(f.get("texto") == texto for f in fallas):
+        return False
+    fallas.append({"cuando": ahora.isoformat(), "texto": texto})
+    _escribir_json(ruta, fallas)
+    return True
+
+
+def fallas_del_dia(domingo, raiz=RAIZ_DOMINGO):
+    """Fallas anotadas ese domingo, en orden: [{"cuando": ISO, "texto": ...}]."""
+    return _leer_json(carpeta(domingo, raiz) / "fallas.json", [])
+
+
 # --- candado -----------------------------------------------------------------------------------
 
 @contextlib.contextmanager
