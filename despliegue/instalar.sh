@@ -4,7 +4,7 @@
 # Rama distinta:  sudo RAMA=master bash instalar.sh
 set -euo pipefail
 
-RAMA="${RAMA:-domingo-mvp}"
+RAMA="${RAMA:-master}"
 REPO_URL="git@github.com:robertolerma07/bot-citas-daltile.git"
 USUARIO="sofia"
 CASA="/home/${USUARIO}"

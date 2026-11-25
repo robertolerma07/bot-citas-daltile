@@ -211,7 +211,7 @@
 - De aquí en adelante, después de cada commit se hace `git push`.
 
 ## 2026-11-25 — Seguimiento de domingo (MVP): Tareas 1 a 9
-Rama `domingo-mvp` (aún no se junta con `master`). Diseño: `docs/superpowers/specs/2026-11-24-seguimiento-domingo-design.md`; plan: `docs/superpowers/plans/2026-11-24-seguimiento-domingo.md`.
+Rama `domingo-mvp`, juntada con `master` el 2026-11-25 tras la revisión final (316 pruebas). Diseño: `docs/superpowers/specs/2026-11-24-seguimiento-domingo-design.md`; plan: `docs/superpowers/plans/2026-11-24-seguimiento-domingo.md`.
 
 **Qué se hizo**
 - Reglas de llamada y decisión; agente "Sofía - seguimiento" como código (no da por buena una respuesta vaga).
@@ -224,7 +224,7 @@ Rama `domingo-mvp` (aún no se junta con `master`). Diseño: `docs/superpowers/s
 **Decisiones**
 - Servidor nuevo en Lightsail (`bot-domingo`), separado de `srm-piloto`. Usuario `sofia` dueño del código, `.venv` y `resultados/`; la página y `cron` corren con ese mismo usuario.
 - HTTPS con Caddy y dominio `<IP-con-guiones>.sslip.io`; solo puertos 22, 80 y 443.
-- Llave de despliegue de GitHub de solo lectura; la rama a desplegar es una variable (`RAMA`, por omisión `domingo-mvp`).
+- Llave de despliegue de GitHub de solo lectura; la rama a desplegar es una variable (`RAMA`, por omisión `master`).
 - El `.env` y `config/numeros_permitidos.txt` se crean a mano en el servidor; `instalar.sh` no activa la página si faltan.
 - El código usa hora de CDMX, así que la zona horaria del servidor no importa.
 
@@ -237,4 +237,4 @@ Rama `domingo-mvp` (aún no se junta con `master`). Diseño: `docs/superpowers/s
 - **Prueba en seco en el servidor (sin llamar):** con `"ensayo": true`, subir `datos/viajes_prueba.xlsx` y aprobarlo desde la página; correr `.venv/bin/python -m domingo.latido` a mano un día que no sea domingo y confirmar que no hace nada (revisar `resultados/domingo/latido.log`); confirmar que llega el correo de aprobación.
 - **Ensayo real un domingo** (gasta créditos y saldo): 4 o 5 celulares del equipo simulan los casos del diseño 5.8 (a tiempo, tarde, vago, no contesta, contesta otra persona). Revisar: estados finales; un correo por persona de monitoreo solo con sus casos; correo de control a las 13:00 y a las 19:30; reintentos a las 19:00 y 19:30; resumen del lunes a las 7:00 con el Excel. Anotar aquí IDs de conversación, duraciones, costo real por llamada y ajustes.
 - Prueba en navegador de "Sofía - seguimiento" (se aplazó; solo se verificó por API).
-- Después de la revisión final, juntar la rama `domingo-mvp` con `master` y desplegar con `RAMA=master`.
+- ✅ 2026-11-25: `domingo-mvp` juntada con `master` después de la revisión final; se despliega `master`.

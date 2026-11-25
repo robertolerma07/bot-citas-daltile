@@ -108,10 +108,10 @@ código pero nunca cambiarlo).
 ### C2. Bajar el código y correr el instalador
 ```
 sudo -u sofia bash -c 'ssh-keyscan -t ed25519 github.com >> /home/sofia/.ssh/known_hosts'
-sudo -u sofia git clone --branch domingo-mvp git@github.com:robertolerma07/bot-citas-daltile.git /home/sofia/bot-citas-daltile
+sudo -u sofia git clone --branch master git@github.com:robertolerma07/bot-citas-daltile.git /home/sofia/bot-citas-daltile
 sudo bash /home/sofia/bot-citas-daltile/despliegue/instalar.sh
 ```
-- `domingo-mvp` es la rama de trabajo; cuando se junte con `master`, usa `sudo RAMA=master bash /home/sofia/bot-citas-daltile/despliegue/instalar.sh`.
+- Se despliega la rama `master`, que ya incluye el seguimiento de domingo.
 - El instalador pone Python, las dependencias, Caddy (el que da el candadito), el servicio de la página y el latido cada
   5 minutos. La hora del servidor no importa: el bot usa siempre la hora de Ciudad de México.
 - La **primera vez se detiene** con un mensaje que dice qué falta (`.env` y la lista de celulares). Es normal: sigue con
